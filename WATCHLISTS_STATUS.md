@@ -11,7 +11,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Data skeleton: 5 ORM Records in `data/orm/`, `datasource.ts` glob extension, both migrations, repository integration tests | ✅ (postgres migration ⏳ unverified) |
-| 2 | Domain layer: entities, value objects, errors, ports, `MediaListAccessPolicy`, `MediaListProgressCalculator`, 4 services + unit tests | ☐ |
+| 2 | Domain layer: entities, value objects, errors, ports, `MediaListAccessPolicy`, `MediaListProgressCalculator`, 4 services + unit tests | ✅ |
 | 3 | Data adapters: TypeORM repositories, mappers (+round-trip tests), `TmdbTvMetadataProvider`, `NotificationGatewayImpl`, composition point | ☐ |
 | 4 | Backend presentation: wire types, Zod schemas, routes, mount, supertest tests | ☐ |
 | 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ☐ |
@@ -62,6 +62,14 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   TypeORM's own metadata for the postgres dialect rather than guessed, and they match the sqlite ones
   since TypeORM derives them from table and column names, not the driver.
 
+- **2026-08-15** — Specials (season 0) are trackable but never block a show from reading as
+  finished, and neither do announced seasons with no episodes yet. This mirrors how the
+  existing request modal filters those seasons. Not previously specified, so worth a look.
+- **2026-08-15** — Reorder accepts only a full permutation of the list and rejects anything
+  else, so a stale client cannot silently drop items out of the ordering.
+- **2026-08-15** — The owner cannot also hold a collaborator row, and cannot leave their own
+  list. Handing a list over to someone else is not supported in v1.
+
 ## Milestone 1 verification (2026-08-14)
 
 - `pnpm test` — 162 passed, 0 failed, including 9 new persistence tests. No regressions.
@@ -72,6 +80,19 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 2 verification (2026-08-15)
+
+- `pnpm test` — 265 passed, 0 failed (103 new: 95 domain, 7 architecture, 1 list query).
+- Domain coverage 97-100% line and 89-96% branch. The few uncovered lines are multi-line
+  function signatures, not logic.
+- The domain layer imports no TypeORM, no entity, no Record and no Express. That rule is
+  enforced by `architecture.test.ts` rather than left to review, and the guard was checked
+  by temporarily adding a forbidden import and confirming the suite failed.
+- Two product micro-decisions surfaced while building and are recorded below (specials,
+  reorder validation).
+- `assertCanView` was written and then deleted: nothing called it and it duplicated the
+  check `listFor` already performs. Caught by the coverage pass.
 
 ## Open follow-ups
 
