@@ -113,3 +113,37 @@ describe('watchlists frontend architecture', () => {
     assert.deepStrictEqual(offenders.map(asRelative), []);
   });
 });
+
+// The frontend keeps its own copy of the Notification enum. A value that exists on one
+// side and not the other means an agent silently never delivers, which is exactly how the
+// watchlist types would have shipped broken.
+describe('notification enum parity', () => {
+  const valuesIn = (source: string) => {
+    const body = source.slice(
+      source.indexOf('enum Notification {') + 'enum Notification {'.length
+    );
+    const entries = body.slice(0, body.indexOf('}'));
+
+    return Object.fromEntries(
+      [...entries.matchAll(/(\w+)\s*=\s*(\d+)/g)].map((match) => [
+        match[1],
+        Number(match[2]),
+      ])
+    );
+  };
+
+  it('matches between the server and the frontend', () => {
+    const root = join(__dirname, '../../..');
+    const server = valuesIn(
+      readFileSync(join(root, 'server/lib/notifications/index.ts'), 'utf8')
+    );
+    const client = valuesIn(
+      readFileSync(
+        join(root, 'src/components/NotificationTypeSelector/index.tsx'),
+        'utf8'
+      )
+    );
+
+    assert.deepStrictEqual(client, server);
+  });
+});
