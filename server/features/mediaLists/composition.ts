@@ -4,6 +4,7 @@ import { TypeOrmMediaListCollaboratorRepository } from '@server/features/mediaLi
 import { TypeOrmMediaListItemRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListItemRepository';
 import { TypeOrmMediaListRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListRepository';
 import { TypeOrmMediaListWatchRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListWatchRepository';
+import { TypeOrmUserDirectory } from '@server/features/mediaLists/data/repositories/TypeOrmUserDirectory';
 import type { NotificationGateway } from '@server/features/mediaLists/domain/ports/NotificationGateway';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import { MediaListAccessPolicy } from '@server/features/mediaLists/domain/services/MediaListAccessPolicy';
@@ -11,6 +12,7 @@ import { MediaListCollaboratorService } from '@server/features/mediaLists/domain
 import { MediaListItemService } from '@server/features/mediaLists/domain/services/MediaListItemService';
 import { MediaListProgressCalculator } from '@server/features/mediaLists/domain/services/MediaListProgressCalculator';
 import { MediaListService } from '@server/features/mediaLists/domain/services/MediaListService';
+import { MediaListViewService } from '@server/features/mediaLists/domain/services/MediaListViewService';
 import { MediaListWatchService } from '@server/features/mediaLists/domain/services/MediaListWatchService';
 
 export interface MediaListServices {
@@ -18,6 +20,7 @@ export interface MediaListServices {
   items: MediaListItemService;
   watches: MediaListWatchService;
   collaborators: MediaListCollaboratorService;
+  views: MediaListViewService;
   progress: MediaListProgressCalculator;
 }
 
@@ -37,6 +40,7 @@ export const buildMediaListServices = (
   const itemRepository = new TypeOrmMediaListItemRepository();
   const watchRepository = new TypeOrmMediaListWatchRepository();
   const collaboratorRepository = new TypeOrmMediaListCollaboratorRepository();
+  const userDirectory = new TypeOrmUserDirectory();
 
   const tv = overrides.tv ?? new TmdbTvMetadataProvider();
   const notifications =
@@ -54,6 +58,16 @@ export const buildMediaListServices = (
   return {
     lists,
     progress,
+    views: new MediaListViewService(
+      listRepository,
+      itemRepository,
+      watchRepository,
+      collaboratorRepository,
+      lists,
+      access,
+      tv,
+      progress
+    ),
     items: new MediaListItemService(
       itemRepository,
       collaboratorRepository,
@@ -73,7 +87,8 @@ export const buildMediaListServices = (
       collaboratorRepository,
       lists,
       access,
-      notifications
+      notifications,
+      userDirectory
     ),
   };
 };

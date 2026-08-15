@@ -3,8 +3,10 @@ import {
   CannotCollaborateAsOwnerError,
   CollaboratorNotFoundError,
   DuplicateCollaboratorError,
+  UserNotFoundError,
 } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type { NotificationGateway } from '@server/features/mediaLists/domain/ports/NotificationGateway';
+import type { UserDirectory } from '@server/features/mediaLists/domain/ports/UserDirectory';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
@@ -16,7 +18,8 @@ export class MediaListCollaboratorService {
     private readonly collaborators: MediaListCollaboratorRepository,
     private readonly listService: MediaListService,
     private readonly access: MediaListAccessPolicy,
-    private readonly notifications: NotificationGateway
+    private readonly notifications: NotificationGateway,
+    private readonly users: UserDirectory
   ) {}
 
   public async listFor(
@@ -33,23 +36,30 @@ export class MediaListCollaboratorService {
 
   public async share(input: {
     listId: number;
-    recipient: UserRef;
+    recipientId: number;
     role: CollaboratorRole;
     actor: UserRef;
   }): Promise<Collaborator> {
     const list = await this.listService.requireList(input.listId);
+    // Permission first. Resolving the recipient before this would let anyone who can see
+    // the list probe which user ids exist by telling 404 apart from 403.
     this.access.assertCan(
       await this.listService.membershipFor(list, input.actor.id),
       'manageCollaborators'
     );
 
-    if (list.owner.id === input.recipient.id) {
+    if (list.owner.id === input.recipientId) {
       throw new CannotCollaborateAsOwnerError();
+    }
+
+    const recipient = await this.users.findById(input.recipientId);
+    if (!recipient) {
+      throw new UserNotFoundError();
     }
 
     const existing = await this.collaborators.findRole(
       input.listId,
-      input.recipient.id
+      input.recipientId
     );
     if (existing) {
       throw new DuplicateCollaboratorError();
@@ -57,14 +67,14 @@ export class MediaListCollaboratorService {
 
     const collaborator = await this.collaborators.add({
       listId: input.listId,
-      userId: input.recipient.id,
+      userId: input.recipientId,
       role: input.role,
       invitedById: input.actor.id,
     });
 
     await this.notifications.notifyListShared({
       list,
-      recipient: input.recipient,
+      recipient,
       role: input.role,
       invitedBy: input.actor,
     });

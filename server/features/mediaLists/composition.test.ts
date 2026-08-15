@@ -61,7 +61,7 @@ describe('media list composition', () => {
 
     await services.collaborators.share({
       listId: list.id,
-      recipient: friend,
+      recipientId: friend.id,
       role: CollaboratorRole.WRITE,
       actor: owner,
     });

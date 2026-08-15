@@ -1,6 +1,16 @@
 import type { EpisodeRef } from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
 
-// Every method is scoped to one user. Watched state is personal: a member records their
+export interface MovieWatchRow {
+  itemId: number;
+  userId: number;
+}
+
+export interface EpisodeWatchRow extends EpisodeRef {
+  itemId: number;
+  userId: number;
+}
+
+// Writes are always scoped to one user. Watched state is personal: a member records their
 // own progress and sees who else finished a title, and nobody writes anyone else's state.
 export interface MediaListWatchRepository {
   isMovieWatched(itemId: number, userId: number): Promise<boolean>;
@@ -24,10 +34,9 @@ export interface MediaListWatchRepository {
     seasonNumber: number
   ): Promise<void>;
 
-  // Users who have a movie watch record, used to build the seen-by badges. Show
-  // completion is derived, so the caller resolves that from episode records instead.
-  findUsersWhoWatchedMovie(itemId: number): Promise<number[]>;
-  findWatchedEpisodeCountsByUser(
-    itemId: number
-  ): Promise<{ userId: number; episodes: EpisodeRef[] }[]>;
+  // Batched so assembling a list view costs a fixed number of queries rather than two
+  // per item. Show completion is derived, so these return raw rows and the caller works
+  // out who has actually finished a title.
+  findMovieWatchesForItems(itemIds: number[]): Promise<MovieWatchRow[]>;
+  findEpisodeWatchesForItems(itemIds: number[]): Promise<EpisodeWatchRow[]>;
 }

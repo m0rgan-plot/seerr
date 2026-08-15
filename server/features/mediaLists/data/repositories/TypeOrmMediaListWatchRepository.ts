@@ -3,7 +3,11 @@ import { User } from '@server/entity/User';
 import MediaListEpisodeWatchRecord from '@server/features/mediaLists/data/orm/MediaListEpisodeWatchRecord';
 import MediaListItemRecord from '@server/features/mediaLists/data/orm/MediaListItemRecord';
 import MediaListItemWatchRecord from '@server/features/mediaLists/data/orm/MediaListItemWatchRecord';
-import type { MediaListWatchRepository } from '@server/features/mediaLists/domain/repositories/MediaListWatchRepository';
+import type {
+  EpisodeWatchRow,
+  MediaListWatchRepository,
+  MovieWatchRow,
+} from '@server/features/mediaLists/domain/repositories/MediaListWatchRepository';
 import type { EpisodeRef } from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
 import { In } from 'typeorm';
 
@@ -147,35 +151,52 @@ export class TypeOrmMediaListWatchRepository implements MediaListWatchRepository
     });
   }
 
-  public async findUsersWhoWatchedMovie(itemId: number): Promise<number[]> {
-    const records = await getRepository(MediaListItemWatchRecord).find({
-      where: { listItem: { id: itemId } },
-      relations: { user: true },
-    });
-    return records.map((record) => record.user.id);
+  public async findMovieWatchesForItems(
+    itemIds: number[]
+  ): Promise<MovieWatchRow[]> {
+    if (itemIds.length === 0) {
+      return [];
+    }
+
+    const rows = await getRepository(MediaListItemWatchRecord)
+      .createQueryBuilder('watch')
+      .select('watch.listItemId', 'itemId')
+      .addSelect('watch.userId', 'userId')
+      .where('watch.listItemId IN (:...itemIds)', { itemIds })
+      .getRawMany<{ itemId: number; userId: number }>();
+
+    return rows.map((row) => ({
+      itemId: Number(row.itemId),
+      userId: Number(row.userId),
+    }));
   }
 
-  public async findWatchedEpisodeCountsByUser(
-    itemId: number
-  ): Promise<{ userId: number; episodes: EpisodeRef[] }[]> {
-    const records = await getRepository(MediaListEpisodeWatchRecord).find({
-      where: { listItem: { id: itemId } },
-      relations: { user: true },
-    });
+  public async findEpisodeWatchesForItems(
+    itemIds: number[]
+  ): Promise<EpisodeWatchRow[]> {
+    if (itemIds.length === 0) {
+      return [];
+    }
 
-    const byUser = new Map<number, EpisodeRef[]>();
-    records.forEach((record) => {
-      const episodes = byUser.get(record.user.id) ?? [];
-      episodes.push({
-        seasonNumber: record.seasonNumber,
-        episodeNumber: record.episodeNumber,
-      });
-      byUser.set(record.user.id, episodes);
-    });
+    const rows = await getRepository(MediaListEpisodeWatchRecord)
+      .createQueryBuilder('watch')
+      .select('watch.listItemId', 'itemId')
+      .addSelect('watch.userId', 'userId')
+      .addSelect('watch.seasonNumber', 'seasonNumber')
+      .addSelect('watch.episodeNumber', 'episodeNumber')
+      .where('watch.listItemId IN (:...itemIds)', { itemIds })
+      .getRawMany<{
+        itemId: number;
+        userId: number;
+        seasonNumber: number;
+        episodeNumber: number;
+      }>();
 
-    return [...byUser.entries()].map(([userId, episodes]) => ({
-      userId,
-      episodes,
+    return rows.map((row) => ({
+      itemId: Number(row.itemId),
+      userId: Number(row.userId),
+      seasonNumber: Number(row.seasonNumber),
+      episodeNumber: Number(row.episodeNumber),
     }));
   }
 }

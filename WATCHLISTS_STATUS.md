@@ -10,10 +10,10 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Data skeleton: 5 ORM Records in `data/orm/`, `datasource.ts` glob extension, both migrations, repository integration tests | ✅ (postgres migration ⏳ unverified) |
+| 1 | Data skeleton: 5 ORM Records in `data/orm/`, `datasource.ts` glob extension, both migrations, repository integration tests | ✅ |
 | 2 | Domain layer: entities, value objects, errors, ports, `MediaListAccessPolicy`, `MediaListProgressCalculator`, 4 services + unit tests | ✅ |
 | 3 | Data adapters: TypeORM repositories, mappers (+round-trip tests), `TmdbTvMetadataProvider`, `NotificationGatewayImpl`, composition point | ✅ |
-| 4 | Backend presentation: wire types, Zod schemas, routes, mount, supertest tests | ☐ |
+| 4 | Backend presentation: wire types, Zod schemas, routes, mount, supertest tests | ✅ |
 | 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ☐ |
 | 6 | List CRUD UI: both nav entries, `WatchlistsList`, `WatchlistCard`, create/edit/delete modals, empty state (1a/1b/1g/1k) | ☐ |
 | 7 | Items + movies: `WatchlistDetail`, `AddMediaModal`, item card/row, filters, grid/rows toggle, `RequestButton`, drag-reorder (1c/1d/1j) | ☐ |
@@ -81,6 +81,17 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   off the record. The alternative was declaring the foreign key column on the Record, which
   would have altered the verified schema for the sake of a convenience field.
 
+- **2026-08-15** — New endpoints must be declared in `seerr-api.yml` or the request validator rejects
+  them with a 404, whatever the handler does. Enforced now by `apiSpec.test.ts`.
+- **2026-08-15** — `nullable: true` beside an `allOf` `$ref` is rejected by the validator. Nullable
+  object references are plain `$ref` with the nullability described in prose, matching the rest of the
+  spec, which pairs `nullable` only with a `type`.
+- **2026-08-15** — The list index returns `previewItems` as bare tmdb ids rather than posters. Resolving
+  artwork is the client's job everywhere else in this app, and doing it server-side would mean a TMDB
+  fan-out per list.
+- **2026-08-15** — Season counts are only fetched for shows the viewer has actually started, since a
+  show with no watched episodes cannot be complete. A list of untouched series costs no TMDB calls.
+
 ## Milestone 1 verification (2026-08-14)
 
 - `pnpm test` — 162 passed, 0 failed, including 9 new persistence tests. No regressions.
@@ -91,6 +102,28 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 4 verification (2026-08-15)
+
+- `pnpm test` — 351 passed, 0 failed. Typecheck, lint and formatting clean.
+- **The endpoints were unreachable in the real app despite every test passing.** The server runs
+  requests through `express-openapi-validator` with `validateRequests: true`, so a path absent from
+  `seerr-api.yml` is rejected with a 404. Route tests mount the router directly and never see that.
+  All 11 paths and 8 schemas are now declared, and `apiSpec.test.ts` walks the Express router stacks
+  and fails if a registered route is undeclared, a declared route no longer exists, or a `$ref` does
+  not resolve. The guard was checked by deleting a path from the spec and confirming a red test.
+- **Fixed an information leak found by a failing test.** Sharing resolved the recipient before
+  checking permission, so a non-owner could tell a real user id from an invented one by comparing
+  404 with 403. The lookup moved behind the permission check and into the domain through a new
+  `UserDirectory` port, which also stopped the route reaching into the user repository directly.
+- Verified against a real Postgres in Docker: all 20 migrations apply, `migration:generate --dr`
+  reports **"No changes in database schema were found"**, and the down path drops all five tables.
+- Adapters exercised directly against Postgres too. The batch watch queries use raw column aliases,
+  which is where sqlite and postgres most easily diverge; ids came back as numbers on both.
+- Walked the whole API over HTTP against Postgres in the running app: create, add, duplicate 409,
+  bad media type 400, mark seen, index counts, share, read-only collaborator refused an item but
+  allowed their own watched state, delete refused, self-leave. Per-user semantics confirmed end to
+  end: the owner reads `watched=false` while seeing the other member in `seenBy`.
 
 ## Milestone 3 verification (2026-08-15)
 
@@ -119,9 +152,6 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 
 ## Open follow-ups
 
-- **The postgres migration has never been executed.** Run `DB_TYPE=postgres pnpm migration:run` against a
-  disposable Postgres, then `migration:generate --dr` to confirm it reports no `media_list` drift, before
-  this reaches a Postgres deployment.
 - Design pass needed for the drag-reorder affordance (blocks part of milestone 7).
 - Frame 1g's "Who can find it" section should be removed from the design (deferred to v2).
 - Confirm the existing `RequestButton` covers both the labelled (row) and icon-only (grid) variants
