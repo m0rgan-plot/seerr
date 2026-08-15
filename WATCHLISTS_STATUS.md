@@ -14,7 +14,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 2 | Domain layer: entities, value objects, errors, ports, `MediaListAccessPolicy`, `MediaListProgressCalculator`, 4 services + unit tests | ✅ |
 | 3 | Data adapters: TypeORM repositories, mappers (+round-trip tests), `TmdbTvMetadataProvider`, `NotificationGatewayImpl`, composition point | ✅ |
 | 4 | Backend presentation: wire types, Zod schemas, routes, mount, supertest tests | ✅ |
-| 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ☐ |
+| 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ✅ |
 | 6 | List CRUD UI: both nav entries, `WatchlistsList`, `WatchlistCard`, create/edit/delete modals, empty state (1a/1b/1g/1k) | ☐ |
 | 7 | Items + movies: `WatchlistDetail`, `AddMediaModal`, item card/row, filters, grid/rows toggle, `RequestButton`, drag-reorder (1c/1d/1j) | ☐ |
 | 8 | Episode tracking: `WatchlistEpisodeTracker`, season rail, episode checklist, per-episode avatars (1e/1f) | ☐ |
@@ -92,6 +92,14 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 - **2026-08-15** — Season counts are only fetched for shows the viewer has actually started, since a
   show with no watched episodes cannot be complete. A list of untouched series costs no TMDB calls.
 
+- **2026-08-15** — Mutation hooks revalidate and rethrow rather than raising toasts. Copy belongs to
+  the component that triggered the action, which keeps the data layer free of i18n.
+- **2026-08-15** — Dates are parsed once in the frontend mappers, so no component handles an ISO
+  string. This is most of what the frontend mapper layer earns.
+- **2026-08-15** — Role helpers (`canEditItems`, `canManageCollaborators`, `canDeleteList`) live on the
+  domain model and mirror the server access policy. They gate the UI only; every mutation is checked
+  again server-side.
+
 ## Milestone 1 verification (2026-08-14)
 
 - `pnpm test` — 162 passed, 0 failed, including 9 new persistence tests. No regressions.
@@ -102,6 +110,18 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 5 verification (2026-08-15)
+
+- `pnpm test` 353 passed, `pnpm typecheck` (both projects) and lint clean. No UI yet, so nothing
+  renders from this milestone.
+- The frontend rule from the plan is now enforced from `architecture.test.ts`, which reads `src/`
+  from the server suite because the frontend still has no runner of its own. Verified by dropping a
+  component that imports axios and confirming a red test.
+- The first version of that guard was too strict and failed on my own hooks. Hooks legitimately name
+  the wire types to type their SWR call; the plan's rule is that they never *return* a DTO. The rule
+  now checks that domain models stay transport-independent, and that components and pages touch
+  neither `dto.ts` nor axios.
 
 ## Milestone 4 verification (2026-08-15)
 
