@@ -33,14 +33,25 @@ export class FakeMediaListRepository implements MediaListRepository {
   public lists: MediaList[] = [];
   private nextId = 1;
 
-  constructor(private readonly users: Map<number, UserRef>) {}
+  constructor(
+    private readonly users: Map<number, UserRef>,
+    // Shared lists are reachable too, so the double has to know about collaborators or
+    // it quietly under-reports what a member can see.
+    private readonly collaborators?: FakeMediaListCollaboratorRepository
+  ) {}
 
   async findById(id: number): Promise<MediaList | null> {
     return this.lists.find((list) => list.id === id) ?? null;
   }
 
   async findAccessibleTo(userId: number): Promise<MediaList[]> {
-    return this.lists.filter((list) => list.owner.id === userId);
+    const shared = (this.collaborators?.rows ?? [])
+      .filter((row) => row.user.id === userId)
+      .map((row) => row.listId);
+
+    return this.lists.filter(
+      (list) => list.owner.id === userId || shared.includes(list.id)
+    );
   }
 
   async create(input: CreateMediaListInput): Promise<MediaList> {

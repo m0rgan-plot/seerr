@@ -2168,6 +2168,17 @@ components:
       required:
         - tmdbId
         - mediaType
+    MediaListPreviewItem:
+      allOf:
+        - $ref: '#/components/schemas/MediaListItemRef'
+        - type: object
+          properties:
+            posterPath:
+              type: string
+              nullable: true
+              example: '/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg'
+          required:
+            - posterPath
     MediaListSeasonProgress:
       type: object
       properties:
@@ -2255,7 +2266,7 @@ components:
             previewItems:
               type: array
               items:
-                $ref: '#/components/schemas/MediaListItemRef'
+                $ref: '#/components/schemas/MediaListPreviewItem'
           required:
             - itemCount
             - seenCount

@@ -14,6 +14,8 @@ export interface MediaListUser {
 export interface MediaListRef {
   tmdbId: number;
   mediaType: MediaType;
+  // Relative TMDB path, or null when there is no art for the title.
+  posterPath: string | null;
 }
 
 export interface MediaList {
