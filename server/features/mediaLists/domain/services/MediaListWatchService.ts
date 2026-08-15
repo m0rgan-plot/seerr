@@ -7,10 +7,21 @@ import {
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import type { MediaListItemRepository } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
 import type { MediaListWatchRepository } from '@server/features/mediaLists/domain/repositories/MediaListWatchRepository';
-import type { ShowProgress } from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
+import type {
+  EpisodeRef,
+  ShowProgress,
+} from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
 import type { MediaListAccessPolicy } from './MediaListAccessPolicy';
 import type { MediaListProgressCalculator } from './MediaListProgressCalculator';
 import type { MediaListService } from './MediaListService';
+
+// The derived rollup plus the episodes it was derived from. The checklist needs to know
+// which boxes are ticked, not just how many. Deliberately not called watchedEpisodes:
+// ShowProgress already uses that name for the count, and one of them would read wrong.
+export interface MediaListItemProgress {
+  progress: ShowProgress;
+  episodes: EpisodeRef[];
+}
 
 // Every method here writes only the caller's own state, which is why read-only
 // collaborators are allowed through: tracking what you watched is not editing the list.
@@ -117,7 +128,7 @@ export class MediaListWatchService {
     listId: number,
     itemId: number,
     userId: number
-  ): Promise<ShowProgress> {
+  ): Promise<MediaListItemProgress> {
     const item = await this.requireTrackableItem(listId, itemId, userId);
     this.assertShow(item);
 
@@ -126,7 +137,10 @@ export class MediaListWatchService {
       this.watches.findWatchedEpisodes(itemId, userId),
     ]);
 
-    return this.progress.showProgress(counts, watched);
+    return {
+      progress: this.progress.showProgress(counts, watched),
+      episodes: watched,
+    };
   }
 
   private assertShow(item: MediaListItem): void {
