@@ -19,7 +19,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 7 | Items + movies: `WatchlistDetail` poster grid, `AddMediaModal`, item card, filters, `RequestButton` (1c/1j). Drag-reorder still deferred | ✅ |
 | 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
-| 10 | Cypress spec + `pnpm i18n:extract` | ☐ |
+| 10 | Cypress spec + `pnpm i18n:extract` | ✅ |
 
 ## Decisions log
 
@@ -128,6 +128,21 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 10 verification (2026-08-15)
+
+- `cypress/e2e/watchlists.cy.ts`: **12 passing, 0 failing** against the built app.
+- Covers both navigation entries, the empty state, create, rename, delete, artwork resolved
+  from TMDB, marking a movie seen and filtering by it, season and episode tracking with the
+  derived state, the reused request modal, sharing, and both collaborator roles.
+- Three failures along the way, all in the spec rather than the product. The sidebar is
+  `hidden lg:flex` and Cypress defaults narrower than that breakpoint, so the desktop entry
+  needed a wider viewport; the async user picker needed typing before its options exist; and
+  the collaborator assertion expected two rows when the owner is deliberately not a
+  collaborator. The failure screenshot showed `POST 201` and both names rendered, which is
+  what made the last one obvious.
+- `pnpm i18n:extract` run: 112 keys, no stray literals in the watchlist components.
+- 368 unit tests still green, typecheck and lint clean.
 
 ## Milestone 9 verification (2026-08-15)
 
@@ -250,6 +265,10 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   check `listFor` already performs. Caught by the coverage pass.
 
 ## Open follow-ups
+
+- **From review (2026-08-15), for a follow-up PR:** clicking a title on the watchlist detail
+  page should open that media's page; the "Mark seen" and "Episodes" buttons do not match the
+  height of the reused "Request" button.
 
 - Design pass needed for the drag-reorder affordance (blocks part of milestone 7).
 - Frame 1g's "Who can find it" section should be removed from the design (deferred to v2).

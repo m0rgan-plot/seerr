@@ -66,7 +66,7 @@ const WatchlistSeasonRow = ({
       : 0;
 
   return (
-    <div className="rounded-lg bg-gray-900">
+    <div data-testid="watchlist-season" className="rounded-lg bg-gray-900">
       <div className="flex flex-wrap items-center gap-3 px-3 py-2">
         <button
           type="button"
@@ -144,6 +144,7 @@ const WatchlistSeasonRow = ({
             return (
               <button
                 key={episode.id}
+                data-testid="watchlist-episode"
                 type="button"
                 disabled={busy}
                 onClick={() => onToggleEpisode(episode.episodeNumber, !ticked)}
