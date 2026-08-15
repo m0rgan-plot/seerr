@@ -2331,6 +2331,30 @@ components:
         - watched
         - progress
         - seenBy
+    MediaListEpisodeRef:
+      type: object
+      properties:
+        seasonNumber:
+          type: number
+          example: 1
+        episodeNumber:
+          type: number
+          example: 3
+      required:
+        - seasonNumber
+        - episodeNumber
+    MediaListItemProgress:
+      type: object
+      properties:
+        progress:
+          $ref: '#/components/schemas/MediaListShowProgress'
+        episodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaListEpisodeRef'
+      required:
+        - progress
+        - episodes
     MediaListCollaborator:
       type: object
       properties:
@@ -8618,7 +8642,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MediaListShowProgress'
+                $ref: '#/components/schemas/MediaListItemProgress'
   /mediaLists/{mediaListId}/items/{itemId}/seasons/{seasonNumber}/watched:
     post:
       summary: Mark a whole season as seen by the current user

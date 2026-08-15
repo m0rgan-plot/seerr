@@ -22,6 +22,9 @@ export const itemsKey = (mediaListId: number, filter?: MediaListItemFilter) =>
     ? `${listKey(mediaListId)}/items?filter=${filter}`
     : `${listKey(mediaListId)}/items`;
 
+export const progressKey = (mediaListId: number, itemId: number) =>
+  `${listKey(mediaListId)}/items/${itemId}/progress`;
+
 export const collaboratorsKey = (mediaListId: number) =>
   `${listKey(mediaListId)}/collaborators`;
 

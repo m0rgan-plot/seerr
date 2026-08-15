@@ -162,9 +162,9 @@ describe('media list composition', () => {
       show.id,
       owner.id
     );
-    assert.strictEqual(partial.watchedEpisodes, 1);
-    assert.strictEqual(partial.totalEpisodes, 2);
-    assert.strictEqual(partial.isComplete, false);
+    assert.strictEqual(partial.progress.watchedEpisodes, 1);
+    assert.strictEqual(partial.progress.totalEpisodes, 2);
+    assert.strictEqual(partial.progress.isComplete, false);
 
     // Marking the season writes every episode TMDB reports for it.
     await services.watches.setSeasonWatched(
@@ -180,8 +180,8 @@ describe('media list composition', () => {
       show.id,
       owner.id
     );
-    assert.strictEqual(complete.watchedEpisodes, 2);
+    assert.strictEqual(complete.progress.watchedEpisodes, 2);
     // Specials are tracked but never block completion.
-    assert.strictEqual(complete.isComplete, true);
+    assert.strictEqual(complete.progress.isComplete, true);
   });
 });

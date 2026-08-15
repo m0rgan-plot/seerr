@@ -2,6 +2,7 @@ import type {
   MediaListCollaboratorDto,
   MediaListDto,
   MediaListItemDto,
+  MediaListItemProgressDto,
   MediaListSummaryDto,
 } from '@app/domain/mediaLists/api/dto';
 import {
@@ -9,9 +10,11 @@ import {
   itemsKey,
   listKey,
   mediaListsKey,
+  progressKey,
 } from '@app/domain/mediaLists/api/mediaListsApi';
 import {
   toCollaborator,
+  toItemProgress,
   toMediaList,
   toMediaListItem,
   toMediaListSummary,
@@ -22,6 +25,7 @@ import type {
   MediaListSummary,
 } from '@app/domain/mediaLists/models/MediaList';
 import type {
+  ItemProgress,
   MediaListItem,
   MediaListItemFilter,
 } from '@app/domain/mediaLists/models/MediaListItem';
@@ -80,6 +84,26 @@ export const useMediaListItems = (
     data: useMemo(() => data?.map(toMediaListItem), [data]),
     error,
     isLoading: !!mediaListId && !data && !error,
+    revalidate: () => {
+      mutate();
+    },
+  };
+};
+
+export const useItemProgress = (
+  mediaListId: number | undefined,
+  itemId: number | undefined,
+  // Only series track progress, and only an open accordion needs it.
+  enabled = true
+): Query<ItemProgress> => {
+  const { data, error, mutate } = useSWR<MediaListItemProgressDto>(
+    enabled && mediaListId && itemId ? progressKey(mediaListId, itemId) : null
+  );
+
+  return {
+    data: useMemo(() => (data ? toItemProgress(data) : undefined), [data]),
+    error,
+    isLoading: enabled && !!mediaListId && !!itemId && !data && !error,
     revalidate: () => {
       mutate();
     },

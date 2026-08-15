@@ -2,6 +2,7 @@ import type {
   MediaListCollaboratorDto,
   MediaListDto,
   MediaListItemDto,
+  MediaListItemProgressDto,
   MediaListSummaryDto,
   MediaListUserDto,
 } from '@app/domain/mediaLists/api/dto';
@@ -11,7 +12,10 @@ import type {
   MediaListSummary,
   MediaListUser,
 } from '@app/domain/mediaLists/models/MediaList';
-import type { MediaListItem } from '@app/domain/mediaLists/models/MediaListItem';
+import type {
+  ItemProgress,
+  MediaListItem,
+} from '@app/domain/mediaLists/models/MediaListItem';
 
 // The seam between the wire and the rest of the app. Dates are parsed once here so no
 // component ever handles an ISO string, and a field the API stops sending fails at this
@@ -70,6 +74,21 @@ export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
       }
     : null,
   seenBy: dto.seenBy.map(toUser),
+});
+
+export const toItemProgress = (
+  dto: MediaListItemProgressDto
+): ItemProgress => ({
+  progress: {
+    seasons: dto.progress.seasons.map((season) => ({ ...season })),
+    watchedEpisodes: dto.progress.watchedEpisodes,
+    totalEpisodes: dto.progress.totalEpisodes,
+    isComplete: dto.progress.isComplete,
+  },
+  episodes: dto.episodes.map((episode) => ({
+    seasonNumber: episode.seasonNumber,
+    episodeNumber: episode.episodeNumber,
+  })),
 });
 
 export const toCollaborator = (
