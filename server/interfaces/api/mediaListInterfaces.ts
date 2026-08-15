@@ -58,6 +58,10 @@ export interface MediaListItem {
   listId: number;
   tmdbId: number;
   mediaType: MediaType;
+  // Resolved from TMDB alongside the list. Null when TMDB no longer knows the title.
+  title: string | null;
+  posterPath: string | null;
+  year: number | null;
   position: number;
   addedBy: MediaListUser | null;
   createdAt: string;

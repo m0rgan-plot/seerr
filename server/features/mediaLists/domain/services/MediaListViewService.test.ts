@@ -151,6 +151,57 @@ describe('MediaListViewService', () => {
     });
   });
 
+  describe('what each screen resolves', () => {
+    // The index shows counts and a short poster strip, so resolving a title for every
+    // item on every list would be a TMDB lookup nobody sees.
+    it('only resolves titles for the preview on the index', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      harness.summaryCalls.length = 0;
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(summary.itemCount, 9);
+      assert.strictEqual(harness.summaryCalls.length, 7);
+    });
+
+    it('resolves a title for every item on the detail page', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      harness.summaryCalls.length = 0;
+
+      const views = await harness.viewService.itemViewsFor(list.id, OWNER.id);
+
+      assert.strictEqual(views.length, 9);
+      assert.strictEqual(harness.summaryCalls.length, 9);
+      assert.strictEqual(views[0].summary?.title, 'Title 1');
+    });
+
+    // A ring reading 0/0 is worse than the extra cached lookup, so the detail page asks
+    // for the episode count of a series nobody has started.
+    it('knows the episode total of an unstarted series on the detail page', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      harness.tv.setSeasons([{ seasonNumber: 1, episodeCount: 20 }]);
+      await harness.itemService.add({
+        listId: list.id,
+        tmdbId: 500,
+        mediaType: MediaType.TV,
+        actor: OWNER,
+      });
+
+      const [onDetail] = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id
+      );
+
+      assert.strictEqual(onDetail.progress?.watchedEpisodes, 0);
+      assert.strictEqual(onDetail.progress?.totalEpisodes, 20);
+    });
+  });
+
   describe('item views', () => {
     it('refuses someone the list was not shared with', async () => {
       const harness = buildHarness();

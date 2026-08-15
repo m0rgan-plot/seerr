@@ -56,10 +56,19 @@ export const buildHarness = () => {
     tv,
     progress
   );
-  // Returns a predictable path so a test can tell a resolved poster from a missing one.
-  const artwork = {
-    getPosterPath: async (tmdbId: number) =>
-      tmdbId === MISSING_ARTWORK_TMDB_ID ? null : `/poster-${tmdbId}.jpg`,
+  // Returns predictable values so a test can tell a resolved title from a missing one.
+  const summaryCalls: number[] = [];
+  const summaries = {
+    getSummary: async (tmdbId: number) => (
+      summaryCalls.push(tmdbId),
+      tmdbId === MISSING_ARTWORK_TMDB_ID
+        ? null
+        : {
+            title: `Title ${tmdbId}`,
+            posterPath: `/poster-${tmdbId}.jpg`,
+            year: 2026,
+          }
+    ),
   };
 
   const viewService = new MediaListViewService(
@@ -71,7 +80,7 @@ export const buildHarness = () => {
     access,
     tv,
     progress,
-    artwork
+    summaries
   );
 
   const userDirectory = {
@@ -111,7 +120,8 @@ export const buildHarness = () => {
     lists,
     items,
     viewService,
-    artwork,
+    summaries,
+    summaryCalls,
     collaborators,
     watches,
     tv,
