@@ -2140,6 +2140,190 @@ components:
             - certification: 'PG'
               meaning: 'Some material may not be suitable for children under 10.'
               order: 2
+    MediaListUser:
+      type: object
+      properties:
+        id:
+          type: number
+          example: 1
+        displayName:
+          type: string
+          example: 'lestatdelioncourt'
+        avatar:
+          type: string
+          example: 'https://gravatar.com/avatar/abc'
+      required:
+        - id
+        - displayName
+        - avatar
+    MediaListItemRef:
+      type: object
+      properties:
+        tmdbId:
+          type: number
+          example: 693134
+        mediaType:
+          type: string
+          enum: [movie, tv]
+      required:
+        - tmdbId
+        - mediaType
+    MediaListSeasonProgress:
+      type: object
+      properties:
+        seasonNumber:
+          type: number
+          example: 1
+        watchedEpisodes:
+          type: number
+          example: 4
+        totalEpisodes:
+          type: number
+          example: 10
+        isComplete:
+          type: boolean
+          example: false
+      required:
+        - seasonNumber
+        - watchedEpisodes
+        - totalEpisodes
+        - isComplete
+    MediaListShowProgress:
+      type: object
+      properties:
+        seasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaListSeasonProgress'
+        watchedEpisodes:
+          type: number
+          example: 12
+        totalEpisodes:
+          type: number
+          example: 20
+        isComplete:
+          type: boolean
+          example: false
+      required:
+        - seasons
+        - watchedEpisodes
+        - totalEpisodes
+        - isComplete
+    MediaList:
+      type: object
+      properties:
+        id:
+          type: number
+          example: 1
+        name:
+          type: string
+          example: 'Sunday Night Sci-Fi'
+        description:
+          type: string
+          nullable: true
+          example: 'Slow burn science fiction'
+        owner:
+          $ref: '#/components/schemas/MediaListUser'
+        role:
+          type: string
+          enum: [owner, write, read]
+        createdAt:
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
+        updatedAt:
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
+      required:
+        - id
+        - name
+        - description
+        - owner
+        - role
+        - createdAt
+        - updatedAt
+    MediaListSummary:
+      allOf:
+        - $ref: '#/components/schemas/MediaList'
+        - type: object
+          properties:
+            itemCount:
+              type: number
+              example: 12
+            seenCount:
+              type: number
+              example: 4
+            previewItems:
+              type: array
+              items:
+                $ref: '#/components/schemas/MediaListItemRef'
+          required:
+            - itemCount
+            - seenCount
+            - previewItems
+    MediaListItem:
+      type: object
+      properties:
+        id:
+          type: number
+          example: 1
+        listId:
+          type: number
+          example: 1
+        tmdbId:
+          type: number
+          example: 693134
+        mediaType:
+          type: string
+          enum: [movie, tv]
+        position:
+          type: number
+          example: 0
+        addedBy:
+          description: Null once the person who added the title is deleted.
+          $ref: '#/components/schemas/MediaListUser'
+        createdAt:
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
+        watched:
+          type: boolean
+          example: false
+        progress:
+          description: Null for movies, which do not track progress per episode.
+          $ref: '#/components/schemas/MediaListShowProgress'
+        seenBy:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaListUser'
+      required:
+        - id
+        - listId
+        - tmdbId
+        - mediaType
+        - position
+        - addedBy
+        - createdAt
+        - watched
+        - progress
+        - seenBy
+    MediaListCollaborator:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/MediaListUser'
+        role:
+          type: string
+          enum: [write, read]
+        invitedBy:
+          description: Null once the person who sent the invitation is deleted.
+          $ref: '#/components/schemas/MediaListUser'
+        createdAt:
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
+      required:
+        - user
+        - role
+        - invitedBy
+        - createdAt
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -8151,6 +8335,476 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OverrideRule'
+  /mediaLists:
+    get:
+      summary: Get the watchlists the current user can reach
+      description: Returns lists the user owns plus lists shared with them.
+      tags:
+        - medialists
+      responses:
+        '200':
+          description: Watchlists returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaListSummary'
+    post:
+      summary: Create a watchlist
+      tags:
+        - medialists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: 'Sunday Night Sci-Fi'
+                description:
+                  type: string
+                  nullable: true
+              required:
+                - name
+      responses:
+        '201':
+          description: Watchlist created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaList'
+  /mediaLists/{mediaListId}:
+    get:
+      summary: Get a single watchlist
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Watchlist returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaList'
+    put:
+      summary: Rename a watchlist or change its description
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Watchlist updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaList'
+    delete:
+      summary: Delete a watchlist
+      description: Reserved to the list owner.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Watchlist deleted
+  /mediaLists/{mediaListId}/items:
+    get:
+      summary: Get the titles on a watchlist
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: filter
+          schema:
+            type: string
+            enum: [all, unseen, inprogress, seen]
+            default: all
+      responses:
+        '200':
+          description: Titles returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaListItem'
+    post:
+      summary: Add a title to a watchlist
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaListItemRef'
+      responses:
+        '201':
+          description: Title added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListItem'
+  /mediaLists/{mediaListId}/items/reorder:
+    post:
+      summary: Reorder the titles on a watchlist
+      description: The supplied order must contain every item on the list exactly once.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderedItemIds:
+                  type: array
+                  items:
+                    type: number
+              required:
+                - orderedItemIds
+      responses:
+        '204':
+          description: Order applied
+  /mediaLists/{mediaListId}/items/{itemId}:
+    delete:
+      summary: Remove a title from a watchlist
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Title removed
+  /mediaLists/{mediaListId}/items/{itemId}/watched:
+    post:
+      summary: Mark a movie as seen by the current user
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Marked as seen
+    delete:
+      summary: Mark a movie as unseen by the current user
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Marked as unseen
+  /mediaLists/{mediaListId}/items/{itemId}/progress:
+    get:
+      summary: Get the current user progress through a series
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Progress returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListShowProgress'
+  /mediaLists/{mediaListId}/items/{itemId}/seasons/{seasonNumber}/watched:
+    post:
+      summary: Mark a whole season as seen by the current user
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: seasonNumber
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Season marked as seen
+    delete:
+      summary: Mark a whole season as unseen by the current user
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: seasonNumber
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Season marked as unseen
+  /mediaLists/{mediaListId}/items/{itemId}/seasons/{seasonNumber}/episodes/{episodeNumber}/watched:
+    post:
+      summary: Mark an episode as seen by the current user
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: seasonNumber
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: episodeNumber
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Episode marked as seen
+    delete:
+      summary: Mark an episode as unseen by the current user
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: seasonNumber
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: episodeNumber
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Episode marked as unseen
+  /mediaLists/{mediaListId}/collaborators:
+    get:
+      summary: Get the people a watchlist is shared with
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Collaborators returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaListCollaborator'
+    post:
+      summary: Share a watchlist with someone
+      description: Reserved to the list owner.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: number
+                role:
+                  type: string
+                  enum: [write, read]
+              required:
+                - userId
+                - role
+      responses:
+        '201':
+          description: Watchlist shared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListCollaborator'
+  /mediaLists/{mediaListId}/collaborators/{userId}:
+    put:
+      summary: Change what someone can do with a shared watchlist
+      description: Reserved to the list owner.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [write, read]
+              required:
+                - role
+      responses:
+        '200':
+          description: Access updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListCollaborator'
+    delete:
+      summary: Remove someone from a shared watchlist
+      description: The owner can remove anyone, and a collaborator can remove themselves.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Access removed
 security:
   - cookieAuth: []
   - apiKey: []

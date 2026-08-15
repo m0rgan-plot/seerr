@@ -43,6 +43,13 @@ export class CollaboratorNotFoundError extends Error {
   }
 }
 
+export class UserNotFoundError extends Error {
+  constructor(message = 'User not found') {
+    super(message);
+    this.name = 'UserNotFoundError';
+  }
+}
+
 export class CannotCollaborateAsOwnerError extends Error {
   constructor(message = 'The owner of a watchlist cannot be added to it') {
     super(message);

@@ -264,30 +264,23 @@ export class FakeMediaListWatchRepository implements MediaListWatchRepository {
       .forEach((key) => this.episodeWatches.delete(key));
   }
 
-  async findUsersWhoWatchedMovie(itemId: number): Promise<number[]> {
+  async findMovieWatchesForItems(itemIds: number[]) {
     return [...this.movieWatches]
-      .filter((key) => key.startsWith(`${itemId}:`))
-      .map((key) => Number(key.split(':')[1]));
+      .map((key) => key.split(':').map(Number))
+      .filter(([itemId]) => itemIds.includes(itemId))
+      .map(([itemId, userId]) => ({ itemId, userId }));
   }
 
-  async findWatchedEpisodeCountsByUser(
-    itemId: number
-  ): Promise<{ userId: number; episodes: EpisodeRef[] }[]> {
-    const byUser = new Map<number, EpisodeRef[]>();
-    [...this.episodeWatches]
-      .filter((key) => key.startsWith(`${itemId}:`))
-      .forEach((key) => {
-        const [, userId, seasonNumber, episodeNumber] = key
-          .split(':')
-          .map(Number);
-        const episodes = byUser.get(userId) ?? [];
-        episodes.push({ seasonNumber, episodeNumber });
-        byUser.set(userId, episodes);
-      });
-    return [...byUser.entries()].map(([userId, episodes]) => ({
-      userId,
-      episodes,
-    }));
+  async findEpisodeWatchesForItems(itemIds: number[]) {
+    return [...this.episodeWatches]
+      .map((key) => key.split(':').map(Number))
+      .filter(([itemId]) => itemIds.includes(itemId))
+      .map(([itemId, userId, seasonNumber, episodeNumber]) => ({
+        itemId,
+        userId,
+        seasonNumber,
+        episodeNumber,
+      }));
   }
 }
 
