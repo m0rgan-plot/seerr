@@ -12,7 +12,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 |---|---|---|
 | 1 | Data skeleton: 5 ORM Records in `data/orm/`, `datasource.ts` glob extension, both migrations, repository integration tests | ✅ (postgres migration ⏳ unverified) |
 | 2 | Domain layer: entities, value objects, errors, ports, `MediaListAccessPolicy`, `MediaListProgressCalculator`, 4 services + unit tests | ✅ |
-| 3 | Data adapters: TypeORM repositories, mappers (+round-trip tests), `TmdbTvMetadataProvider`, `NotificationGatewayImpl`, composition point | ☐ |
+| 3 | Data adapters: TypeORM repositories, mappers (+round-trip tests), `TmdbTvMetadataProvider`, `NotificationGatewayImpl`, composition point | ✅ |
 | 4 | Backend presentation: wire types, Zod schemas, routes, mount, supertest tests | ☐ |
 | 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ☐ |
 | 6 | List CRUD UI: both nav entries, `WatchlistsList`, `WatchlistCard`, create/edit/delete modals, empty state (1a/1b/1g/1k) | ☐ |
@@ -70,6 +70,17 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 - **2026-08-15** — The owner cannot also hold a collaborator row, and cannot leave their own
   list. Handing a list over to someone else is not supported in v1.
 
+- **2026-08-15** — `buildMediaListServices` accepts overrides for the two ports that reach
+  outside the database (TMDB, notifications). `TheMovieDb` declares its methods as instance
+  arrow properties, so they cannot be mocked on the prototype; injecting at the composition
+  root is cleaner than monkey-patching an instance anyway.
+- **2026-08-15** — An unrecognised value in the collaborator `role` column maps to read, not
+  write. The column is a plain varchar, so a row written by hand or by an older build must
+  fail closed rather than grant editing rights.
+- **2026-08-15** — `toMediaListItem` takes the list id as an argument instead of reading it
+  off the record. The alternative was declaring the foreign key column on the Record, which
+  would have altered the verified schema for the sake of a convenience field.
+
 ## Milestone 1 verification (2026-08-14)
 
 - `pnpm test` — 162 passed, 0 failed, including 9 new persistence tests. No regressions.
@@ -80,6 +91,18 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 3 verification (2026-08-15)
+
+- `pnpm test` — 315 passed, 0 failed (50 new: 26 repository, 11 mapper, 6 notification,
+  4 TMDB provider, 3 composition).
+- Mappers 100% across the board. Repositories 99-100% line, 84-94% branch. The notification
+  gateway went from 52% to 71% branch once it got a direct test.
+- The composition test drives the real services over the real adapters and the real schema:
+  share, add, revoke, delete, plus season derivation with the TMDB port substituted.
+- `MEDIA_LIST_SHARED = 8192` and `MEDIA_LIST_ITEM_ADDED = 16384` added to the Notification
+  enum. **Still to do in milestone 9**: register both in `NotificationTypeSelector`, or
+  agents will never deliver them.
 
 ## Milestone 2 verification (2026-08-15)
 
