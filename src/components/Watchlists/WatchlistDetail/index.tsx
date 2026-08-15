@@ -141,6 +141,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
             <button
               key={value}
               type="button"
+              data-testid={`watchlist-filter-${value}`}
               onClick={() => setFilter(value)}
               className={`rounded-md border px-3 py-1.5 text-sm font-medium transition duration-150 ${
                 filter === value

@@ -32,7 +32,10 @@ const WatchlistShelf = ({
   const intl = useIntl();
 
   return (
-    <div className="flex flex-col gap-4 border-t border-gray-700 py-4 lg:flex-row lg:items-center lg:gap-5">
+    <div
+      data-testid="watchlist-shelf"
+      className="flex flex-col gap-4 border-t border-gray-700 py-4 lg:flex-row lg:items-center lg:gap-5"
+    >
       <div className="flex w-full flex-none flex-col gap-1.5 lg:w-[300px]">
         <div className="flex items-start justify-between gap-2">
           <Link
