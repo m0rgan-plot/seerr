@@ -57,14 +57,20 @@ router.post('/', async (req, res, next) => {
       actor: toUserRef(req.user!),
     });
 
-    return res
-      .status(201)
-      .json(
-        toMediaListItemDto(
-          { item, watched: false, progress: null, seenByUserIds: [] },
-          []
-        )
-      );
+    return res.status(201).json(
+      // A freshly added title has no watch state yet, and the client already knows
+      // what it just added, so resolving the summary waits for the next list read.
+      toMediaListItemDto(
+        {
+          item,
+          summary: null,
+          watched: false,
+          progress: null,
+          seenByUserIds: [],
+        },
+        []
+      )
+    );
   } catch (error) {
     return next(toHttpError(error));
   }
