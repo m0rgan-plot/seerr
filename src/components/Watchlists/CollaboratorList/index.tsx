@@ -70,6 +70,7 @@ const CollaboratorList = ({
         {collaborators.map((collaborator) => (
           <div
             key={collaborator.user.id}
+            data-testid="watchlist-collaborator"
             className="flex items-center gap-3 border-b border-gray-700 py-2.5"
           >
             <Avatar user={collaborator.user} />
