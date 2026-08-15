@@ -17,6 +17,8 @@ export enum Notification {
   ISSUE_RESOLVED = 1024,
   ISSUE_REOPENED = 2048,
   MEDIA_AUTO_REQUESTED = 4096,
+  MEDIA_LIST_SHARED = 8192,
+  MEDIA_LIST_ITEM_ADDED = 16384,
 }
 
 export const hasNotificationType = (
