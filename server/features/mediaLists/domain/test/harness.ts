@@ -52,11 +52,15 @@ export const buildHarness = () => {
     tv,
     progress
   );
+  const userDirectory = {
+    findById: async (userId: number) => users.get(userId) ?? null,
+  };
   const collaboratorService = new MediaListCollaboratorService(
     collaborators,
     listService,
     access,
-    notifications
+    notifications,
+    userDirectory
   );
 
   // A list owned by OWNER, shared write with WRITER and read with READER.

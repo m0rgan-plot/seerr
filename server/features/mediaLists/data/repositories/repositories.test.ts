@@ -400,23 +400,35 @@ describe('media list repositories', () => {
       );
     });
 
-    it('reports who watched a movie and who watched which episodes', async () => {
+    // Batched so a list view costs a fixed number of queries. The raw aliases these use
+    // are the part most likely to behave differently between sqlite and postgres.
+    it('reports movie and episode watches for a batch of items', async () => {
       const { item, owner, friend } = await seedItem();
       await watches.setMovieWatched(item.id, owner.id);
       await watches.setEpisodesWatched(item.id, friend.id, [
         { seasonNumber: 1, episodeNumber: 1 },
       ]);
 
-      assert.deepStrictEqual(await watches.findUsersWhoWatchedMovie(item.id), [
-        owner.id,
-      ]);
-      const byUser = await watches.findWatchedEpisodeCountsByUser(item.id);
-      assert.deepStrictEqual(byUser, [
-        {
-          userId: friend.id,
-          episodes: [{ seasonNumber: 1, episodeNumber: 1 }],
-        },
-      ]);
+      assert.deepStrictEqual(
+        await watches.findMovieWatchesForItems([item.id]),
+        [{ itemId: item.id, userId: owner.id }]
+      );
+      assert.deepStrictEqual(
+        await watches.findEpisodeWatchesForItems([item.id]),
+        [
+          {
+            itemId: item.id,
+            userId: friend.id,
+            seasonNumber: 1,
+            episodeNumber: 1,
+          },
+        ]
+      );
+    });
+
+    it('returns nothing for an empty batch', async () => {
+      assert.deepStrictEqual(await watches.findMovieWatchesForItems([]), []);
+      assert.deepStrictEqual(await watches.findEpisodeWatchesForItems([]), []);
     });
   });
 

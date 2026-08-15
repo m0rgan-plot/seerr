@@ -3,6 +3,7 @@ import {
   CollaboratorNotFoundError,
   DuplicateCollaboratorError,
   MediaListAccessDeniedError,
+  UserNotFoundError,
 } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import {
   OWNER,
@@ -25,7 +26,7 @@ describe('MediaListCollaboratorService', () => {
 
     const collaborator = await harness.collaboratorService.share({
       listId: list.id,
-      recipient: WRITER,
+      recipientId: WRITER.id,
       role: CollaboratorRole.WRITE,
       actor: OWNER,
     });
@@ -50,11 +51,48 @@ describe('MediaListCollaboratorService', () => {
       () =>
         harness.collaboratorService.share({
           listId: list.id,
-          recipient: OWNER,
+          recipientId: OWNER.id,
           role: CollaboratorRole.WRITE,
           actor: OWNER,
         }),
       CannotCollaborateAsOwnerError
+    );
+  });
+
+  // Permission is checked before the recipient is resolved, so a caller who is not the
+  // owner cannot tell a real user id from an invented one.
+  it('refuses a non-owner before it ever looks the recipient up', async () => {
+    const harness = buildHarness();
+    const list = await harness.seedSharedList();
+
+    await assert.rejects(
+      () =>
+        harness.collaboratorService.share({
+          listId: list.id,
+          recipientId: 123456,
+          role: CollaboratorRole.READ,
+          actor: WRITER,
+        }),
+      MediaListAccessDeniedError
+    );
+  });
+
+  it('reports an unknown recipient to the owner', async () => {
+    const harness = buildHarness();
+    const list = await harness.listService.create({
+      name: 'Film club',
+      ownerId: OWNER.id,
+    });
+
+    await assert.rejects(
+      () =>
+        harness.collaboratorService.share({
+          listId: list.id,
+          recipientId: 123456,
+          role: CollaboratorRole.READ,
+          actor: OWNER,
+        }),
+      UserNotFoundError
     );
   });
 
@@ -66,7 +104,7 @@ describe('MediaListCollaboratorService', () => {
       () =>
         harness.collaboratorService.share({
           listId: list.id,
-          recipient: READER,
+          recipientId: READER.id,
           role: CollaboratorRole.WRITE,
           actor: OWNER,
         }),
@@ -83,7 +121,7 @@ describe('MediaListCollaboratorService', () => {
         () =>
           harness.collaboratorService.share({
             listId: list.id,
-            recipient: STRANGER,
+            recipientId: STRANGER.id,
             role: CollaboratorRole.READ,
             actor,
           }),
