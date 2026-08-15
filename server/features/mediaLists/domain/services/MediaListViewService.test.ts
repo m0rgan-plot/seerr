@@ -1,0 +1,220 @@
+import { MediaType } from '@server/constants/media';
+import { MediaListAccessDeniedError } from '@server/features/mediaLists/domain/errors/MediaListErrors';
+import {
+  buildHarness,
+  MISSING_ARTWORK_TMDB_ID,
+  OWNER,
+  READER,
+  STRANGER,
+  WRITER,
+} from '@server/features/mediaLists/domain/test/harness';
+import assert from 'node:assert';
+import { describe, it } from 'node:test';
+
+const addMovies = async (
+  harness: ReturnType<typeof buildHarness>,
+  listId: number,
+  tmdbIds: number[]
+) => {
+  for (const tmdbId of tmdbIds) {
+    await harness.itemService.add({
+      listId,
+      tmdbId,
+      mediaType: MediaType.MOVIE,
+      actor: OWNER,
+    });
+  }
+};
+
+describe('MediaListViewService', () => {
+  describe('summaries', () => {
+    it('counts titles and how many the caller has finished', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3]);
+      const [first] = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.watchService.setMovieWatched(
+        list.id,
+        first.id,
+        OWNER.id,
+        true
+      );
+
+      const [forOwner] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(forOwner.itemCount, 3);
+      assert.strictEqual(forOwner.seenCount, 1);
+      assert.deepStrictEqual(forOwner.membership, { kind: 'owner' });
+    });
+
+    // seenCount is the caller's own progress, so two members of one list see
+    // different numbers for the same titles.
+    it('counts each member separately', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.watchService.setMovieWatched(
+        list.id,
+        items[0].id,
+        WRITER.id,
+        true
+      );
+
+      const [forOwner] = await harness.viewService.summariesFor(OWNER.id);
+      assert.strictEqual(forOwner.seenCount, 0);
+    });
+
+    it('resolves a poster for each preview title', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [11, 12]);
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.deepStrictEqual(summary.previewItems, [
+        {
+          tmdbId: 11,
+          mediaType: MediaType.MOVIE,
+          posterPath: '/poster-11.jpg',
+        },
+        {
+          tmdbId: 12,
+          mediaType: MediaType.MOVIE,
+          posterPath: '/poster-12.jpg',
+        },
+      ]);
+    });
+
+    // Artwork is decoration: a title with no art leaves a gap rather than failing the page.
+    it('leaves the poster null when there is no art', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [MISSING_ARTWORK_TMDB_ID]);
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(summary.previewItems[0].posterPath, null);
+    });
+
+    // The strip only holds so many, and every extra preview is another TMDB lookup.
+    it('caps the preview at seven titles', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(summary.itemCount, 9);
+      assert.strictEqual(summary.previewItems.length, 7);
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => item.tmdbId),
+        [1, 2, 3, 4, 5, 6, 7]
+      );
+    });
+
+    it('returns an empty preview for a list with nothing on it', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(summary.itemCount, 0);
+      assert.deepStrictEqual(summary.previewItems, []);
+    });
+
+    it('reports the role each member holds', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      const [asWriter] = await harness.viewService.summariesFor(WRITER.id);
+      const [asReader] = await harness.viewService.summariesFor(READER.id);
+
+      assert.deepStrictEqual(asWriter.membership, {
+        kind: 'collaborator',
+        role: 'write',
+      });
+      assert.deepStrictEqual(asReader.membership, {
+        kind: 'collaborator',
+        role: 'read',
+      });
+    });
+
+    it('shows nothing to someone with no lists', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      assert.deepStrictEqual(
+        await harness.viewService.summariesFor(STRANGER.id),
+        []
+      );
+    });
+  });
+
+  describe('item views', () => {
+    it('refuses someone the list was not shared with', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+
+      await assert.rejects(
+        () => harness.viewService.itemViewsFor(list.id, STRANGER.id),
+        MediaListAccessDeniedError
+      );
+    });
+
+    it('reports the caller own state and who else finished a title', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1]);
+      const [item] = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.watchService.setMovieWatched(
+        list.id,
+        item.id,
+        WRITER.id,
+        true
+      );
+
+      const [forOwner] = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id
+      );
+
+      assert.strictEqual(forOwner.watched, false);
+      assert.deepStrictEqual(forOwner.seenByUserIds, [WRITER.id]);
+      assert.strictEqual(forOwner.progress, null);
+    });
+
+    it('filters by the caller own state', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.watchService.setMovieWatched(
+        list.id,
+        items[1].id,
+        OWNER.id,
+        true
+      );
+
+      const seen = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id,
+        'seen'
+      );
+      const unseen = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id,
+        'unseen'
+      );
+
+      assert.deepStrictEqual(
+        seen.map((view) => view.item.tmdbId),
+        [2]
+      );
+      assert.deepStrictEqual(
+        unseen.map((view) => view.item.tmdbId),
+        [1]
+      );
+    });
+  });
+});

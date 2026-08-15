@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon,
   EyeSlashIcon,
   FilmIcon,
+  RectangleStackIcon,
   SparklesIcon,
   TvIcon,
   UsersIcon,
@@ -26,6 +27,7 @@ export const menuMessages = defineMessages('components.Layout.Sidebar', {
   browsemovies: 'Movies',
   browsetv: 'Series',
   requests: 'Requests',
+  watchlists: 'Watchlists',
   blocklist: 'Blocklist',
   issues: 'Issues',
   users: 'Users',
@@ -76,6 +78,12 @@ const SidebarLinks: SidebarLinkProps[] = [
     messagesKey: 'requests',
     svgIcon: <ClockIcon className="mr-3 h-6 w-6" />,
     activeRegExp: /^\/requests/,
+  },
+  {
+    href: '/watchlists',
+    messagesKey: 'watchlists',
+    svgIcon: <RectangleStackIcon className="mr-3 h-6 w-6" />,
+    activeRegExp: /^\/watchlists/,
   },
   {
     href: '/blocklist',
