@@ -20,6 +20,10 @@ export interface MediaListItem {
   listId: number;
   tmdbId: number;
   mediaType: MediaType;
+  // Resolved from TMDB with the list. Null when TMDB no longer knows the title.
+  title: string | null;
+  posterPath: string | null;
+  year: number | null;
   position: number;
   // Null once the person who added it is deleted. The title stays on the list.
   addedBy: MediaListUser | null;
