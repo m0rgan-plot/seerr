@@ -5,6 +5,7 @@ import PageTitle from '@app/components/Common/PageTitle';
 import AddMediaModal from '@app/components/Watchlists/AddMediaModal';
 import CreateEditWatchlistModal from '@app/components/Watchlists/CreateEditWatchlistModal';
 import DeleteWatchlistModal from '@app/components/Watchlists/DeleteWatchlistModal';
+import ShareWatchlistModal from '@app/components/Watchlists/ShareWatchlistModal';
 import WatchlistEpisodeTracker from '@app/components/Watchlists/WatchlistEpisodeTracker';
 import WatchlistItemCard from '@app/components/Watchlists/WatchlistItemCard';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
@@ -16,12 +17,17 @@ import {
 import {
   canDeleteList,
   canEditItems,
+  canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
 import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
-import { PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
+import {
+  PencilSquareIcon,
+  PlusIcon,
+  UserPlusIcon,
+} from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Fragment, useState } from 'react';
@@ -31,6 +37,7 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   watchlists: 'Watchlists',
   addmedia: 'Add media',
   edit: 'Edit',
+  share: 'Share',
   all: 'All',
   unseen: 'Unseen',
   inprogress: 'In progress',
@@ -56,6 +63,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [trackingItemId, setTrackingItemId] = useState<number | null>(null);
+  const [showShare, setShowShare] = useState(false);
 
   const { data: list, error, isLoading } = useMediaList(mediaListId);
   const {
@@ -106,6 +114,12 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
         </div>
 
         <div className="mt-3 flex gap-2 lg:mt-0">
+          {canManageCollaborators(list.role) && (
+            <Button buttonType="default" onClick={() => setShowShare(true)}>
+              <UserPlusIcon />
+              <span>{intl.formatMessage(messages.share)}</span>
+            </Button>
+          )}
           {canEdit && (
             <Button buttonType="default" onClick={() => setShowEdit(true)}>
               <PencilSquareIcon />
@@ -218,6 +232,12 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
           )}
         </div>
       )}
+
+      <ShareWatchlistModal
+        show={showShare}
+        list={list}
+        onCancel={() => setShowShare(false)}
+      />
 
       <AddMediaModal
         show={showAdd}

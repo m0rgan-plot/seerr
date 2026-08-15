@@ -18,7 +18,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 6 | List CRUD UI: both nav entries, shelves index, create/edit/delete modals, empty state (1b/1g/1k) | ✅ |
 | 7 | Items + movies: `WatchlistDetail` poster grid, `AddMediaModal`, item card, filters, `RequestButton` (1c/1j). Drag-reorder still deferred | ✅ |
 | 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
-| 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types + `NotificationTypeSelector` (1h/1i) | ☐ |
+| 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ☐ |
 
 ## Decisions log
@@ -128,6 +128,23 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 9 verification (2026-08-15)
+
+- `pnpm test` 368 passed, typecheck and lint clean.
+- The share modal matches frame 1h: user picker, role dropdown, invite, people with access
+  with the owner listed separately, per-row role dropdowns and removal.
+- Verified over HTTP with two real users: sharing records the inviter, a read collaborator
+  views (200) but cannot add (403) while still recording their own watched state (204),
+  promoting to write lets them add (201) but never delete (403), and the owner's Silo count
+  stayed at 11/30 while the collaborator ticked their own episode.
+- **Both notification types are now registered** in `NotificationTypeSelector`, which is what
+  makes agents actually deliver them. The frontend keeps its own copy of the `Notification`
+  enum, so `architecture.test.ts` now asserts the two enums match: a value on one side only
+  is exactly how these would have shipped silently undeliverable.
+- Deviation from the frame: collaborator rows show display names but not email addresses.
+  `UserRef` deliberately excludes email, and putting it back would undo the guarantee that no
+  sensitive field can travel out with a list.
 
 ## Milestone 8 verification (2026-08-15)
 
