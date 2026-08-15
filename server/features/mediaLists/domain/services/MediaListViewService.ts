@@ -1,6 +1,7 @@
 import { MediaType } from '@server/constants/media';
 import type { MediaList } from '@server/features/mediaLists/domain/entities/MediaList';
 import type { MediaListItem } from '@server/features/mediaLists/domain/entities/MediaListItem';
+import type { MediaArtworkProvider } from '@server/features/mediaLists/domain/ports/MediaArtworkProvider';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type { MediaListItemRepository } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
@@ -30,15 +31,24 @@ export interface MediaListItemView {
   seenByUserIds: number[];
 }
 
+export interface MediaListPreviewItem {
+  tmdbId: number;
+  mediaType: MediaListItem['mediaType'];
+  // Null when TMDB has no art, or no longer knows the title.
+  posterPath: string | null;
+}
+
 export interface MediaListSummary {
   list: MediaList;
   membership: MediaListMembership;
   itemCount: number;
   seenCount: number;
-  previewItems: MediaListItem[];
+  previewItems: MediaListPreviewItem[];
 }
 
-const PREVIEW_ITEM_COUNT = 4;
+// Enough to fill the poster strip on a shelf row without turning the index into a long
+// run of TMDB lookups.
+const PREVIEW_ITEM_COUNT = 7;
 
 // Assembles what the list and detail screens read. Kept apart from the services that
 // change things, because the rules for reading are only ever "who is allowed to look"
@@ -52,7 +62,8 @@ export class MediaListViewService {
     private readonly listService: MediaListService,
     private readonly access: MediaListAccessPolicy,
     private readonly tv: TvMetadataProvider,
-    private readonly progress: MediaListProgressCalculator
+    private readonly progress: MediaListProgressCalculator,
+    private readonly artwork: MediaArtworkProvider
   ) {}
 
   public async summariesFor(userId: number): Promise<MediaListSummary[]> {
@@ -72,7 +83,9 @@ export class MediaListViewService {
           membership,
           itemCount: items.length,
           seenCount: views.filter((view) => view.watched).length,
-          previewItems: items.slice(0, PREVIEW_ITEM_COUNT),
+          previewItems: await this.buildPreview(
+            items.slice(0, PREVIEW_ITEM_COUNT)
+          ),
         };
       })
     );
@@ -193,6 +206,21 @@ export class MediaListViewService {
     });
 
     return byItem;
+  }
+
+  private async buildPreview(
+    items: MediaListItem[]
+  ): Promise<MediaListPreviewItem[]> {
+    return Promise.all(
+      items.map(async (item) => ({
+        tmdbId: item.tmdbId,
+        mediaType: item.mediaType,
+        posterPath: await this.artwork.getPosterPath(
+          item.tmdbId,
+          item.mediaType
+        ),
+      }))
+    );
   }
 
   private async loadSeasonCounts(

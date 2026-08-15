@@ -16,6 +16,12 @@ export interface MediaListItemRef {
   mediaType: MediaType;
 }
 
+export interface MediaListPreviewItem extends MediaListItemRef {
+  // Relative TMDB path, or null when there is no art. Clients build the full URL the
+  // same way they do everywhere else.
+  posterPath: string | null;
+}
+
 export interface MediaListSeasonProgress {
   seasonNumber: number;
   watchedEpisodes: number;
@@ -44,7 +50,7 @@ export interface MediaListSummary extends MediaList {
   itemCount: number;
   // How many titles the requesting member has finished, not a shared total.
   seenCount: number;
-  previewItems: MediaListItemRef[];
+  previewItems: MediaListPreviewItem[];
 }
 
 export interface MediaListItem {
