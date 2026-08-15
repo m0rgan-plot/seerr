@@ -17,7 +17,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ✅ |
 | 6 | List CRUD UI: both nav entries, shelves index, create/edit/delete modals, empty state (1b/1g/1k) | ✅ |
 | 7 | Items + movies: `WatchlistDetail` poster grid, `AddMediaModal`, item card, filters, `RequestButton` (1c/1j). Drag-reorder still deferred | ✅ |
-| 8 | Episode tracking: `WatchlistEpisodeTracker`, season rail, episode checklist, per-episode avatars (1e/1f) | ☐ |
+| 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types + `NotificationTypeSelector` (1h/1i) | ☐ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ☐ |
 
@@ -112,6 +112,12 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   and year together. The detail grid needs all three, and one TMDB call per title serves both
   the index strip and the grid.
 
+- **2026-08-15** — Episode titles are fetched by the client from the existing tv season
+  endpoint, and only once a season is expanded. The server returns which episodes are ticked;
+  it has no reason to also carry their names.
+- **2026-08-15** — Known nit: toggling an episode scrolls the detail page back to the top,
+  because the item list re-renders on revalidation. Worth a look when the reorder design lands.
+
 ## Milestone 1 verification (2026-08-14)
 
 - `pnpm test` — 162 passed, 0 failed, including 9 new persistence tests. No regressions.
@@ -122,6 +128,19 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 8 verification (2026-08-15)
+
+- `pnpm test` 367 passed, typecheck and lint clean.
+- Verified in the browser with real data: the accordion opens inline under the poster grid,
+  season rows show per-season progress and a bulk toggle, and expanding a season lists real
+  episode titles and air dates. Ticking S2E1 moved the card ring to 11/30, the caption to
+  "11 / 30 episodes" and the header to "You've seen 11 of 30" in one go.
+- Also checked over HTTP: ticking two episodes gives 2/30 with the right refs, and marking
+  season 1 gives 10/10 complete while the show correctly stays 10/30 incomplete.
+- The progress endpoint now returns the watched episode refs alongside the derived rollup.
+  The field is called `episodes`, not `watchedEpisodes`, because `ShowProgress` already uses
+  that name for the count and a failing test showed how easily the two get confused.
 
 ## Milestone 7 verification (2026-08-15)
 

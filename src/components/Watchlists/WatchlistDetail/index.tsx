@@ -5,6 +5,7 @@ import PageTitle from '@app/components/Common/PageTitle';
 import AddMediaModal from '@app/components/Watchlists/AddMediaModal';
 import CreateEditWatchlistModal from '@app/components/Watchlists/CreateEditWatchlistModal';
 import DeleteWatchlistModal from '@app/components/Watchlists/DeleteWatchlistModal';
+import WatchlistEpisodeTracker from '@app/components/Watchlists/WatchlistEpisodeTracker';
 import WatchlistItemCard from '@app/components/Watchlists/WatchlistItemCard';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
@@ -23,7 +24,7 @@ import defineMessages from '@app/utils/defineMessages';
 import { PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistDetail', {
@@ -41,7 +42,6 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
   seenfailed: 'Something went wrong updating your watched state.',
-  episodessoon: 'Episode tracking arrives in the next step.',
 });
 
 const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'inprogress', 'seen'];
@@ -55,6 +55,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [trackingItemId, setTrackingItemId] = useState<number | null>(null);
 
   const { data: list, error, isLoading } = useMediaList(mediaListId);
   const {
@@ -153,42 +154,53 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       ) : items && items.length > 0 ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
           {items.map((item) => (
-            <WatchlistItemCard
-              key={item.id}
-              item={item}
-              canEdit={canEdit}
-              onToggleSeen={async () => {
-                try {
-                  await setMovieWatched(item.id, !item.watched);
-                } catch {
-                  addToast(intl.formatMessage(messages.seenfailed), {
-                    appearance: 'error',
-                    autoDismiss: true,
-                  });
+            <Fragment key={item.id}>
+              <WatchlistItemCard
+                item={item}
+                canEdit={canEdit}
+                onToggleSeen={async () => {
+                  try {
+                    await setMovieWatched(item.id, !item.watched);
+                  } catch {
+                    addToast(intl.formatMessage(messages.seenfailed), {
+                      appearance: 'error',
+                      autoDismiss: true,
+                    });
+                  }
+                }}
+                onOpenEpisodes={() =>
+                  setTrackingItemId((current) =>
+                    current === item.id ? null : item.id
+                  )
                 }
-              }}
-              onOpenEpisodes={() =>
-                addToast(intl.formatMessage(messages.episodessoon), {
-                  appearance: 'info',
-                  autoDismiss: true,
-                })
-              }
-              onRemove={async () => {
-                try {
-                  await removeItem(item.id);
-                  addToast(intl.formatMessage(messages.removed), {
-                    appearance: 'success',
-                    autoDismiss: true,
-                  });
-                } catch {
-                  addToast(intl.formatMessage(messages.removefailed), {
-                    appearance: 'error',
-                    autoDismiss: true,
-                  });
-                }
-              }}
-              onRequestUpdate={revalidate}
-            />
+                onRemove={async () => {
+                  try {
+                    await removeItem(item.id);
+                    addToast(intl.formatMessage(messages.removed), {
+                      appearance: 'success',
+                      autoDismiss: true,
+                    });
+                  } catch {
+                    addToast(intl.formatMessage(messages.removefailed), {
+                      appearance: 'error',
+                      autoDismiss: true,
+                    });
+                  }
+                }}
+                onRequestUpdate={revalidate}
+              />
+
+              {/* Spans the grid so the accordion opens under the row holding the card,
+                  rather than squeezing into one poster's column. */}
+              {trackingItemId === item.id && (
+                <WatchlistEpisodeTracker
+                  mediaListId={mediaListId}
+                  item={item}
+                  onClose={() => setTrackingItemId(null)}
+                  onChanged={revalidate}
+                />
+              )}
+            </Fragment>
           ))}
         </div>
       ) : (
