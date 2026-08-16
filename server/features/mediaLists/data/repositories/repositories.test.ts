@@ -206,6 +206,27 @@ describe('media list repositories', () => {
       assert.ok(media);
     });
 
+    // Blocklisting a title deletes its media row. Cascading from there would take the
+    // list entry with it, and with it what every member had recorded as watched.
+    it('keeps the item and the watch history when the media row is deleted', async () => {
+      const { list, owner, friend } = await seedList();
+      const item = await items.add({
+        listId: list.id,
+        tmdbId: 4242,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      await watches.setMovieWatched(item.id, friend.id);
+
+      await getRepository(Media).delete({ tmdbId: 4242 });
+
+      assert.ok(await items.findById(item.id));
+      assert.strictEqual(
+        await watches.isMovieWatched(item.id, friend.id),
+        true
+      );
+    });
+
     it('finds an item by title within a list', async () => {
       const { list, owner } = await seedList();
       await items.add({
