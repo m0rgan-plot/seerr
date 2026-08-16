@@ -64,6 +64,7 @@ export const toMediaListSummaryDto = (
     mediaType: item.mediaType,
     posterPath: item.posterPath,
     watched: item.watched,
+    status: item.status,
   })),
 });
 
@@ -79,6 +80,7 @@ export const toMediaListItemDto = (
   posterPath: view.summary?.posterPath ?? null,
   year: view.summary?.year ?? null,
   position: view.item.position,
+  status: view.item.status,
   addedBy: toOptionalUser(view.item.addedBy),
   createdAt: view.item.createdAt.toISOString(),
   watched: view.watched,

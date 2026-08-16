@@ -2,13 +2,16 @@ import Button from '@app/components/Common/Button';
 import Header from '@app/components/Common/Header';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
+import AddMediaModal from '@app/components/Watchlists/AddMediaModal';
 import CreateEditWatchlistModal from '@app/components/Watchlists/CreateEditWatchlistModal';
 import DeleteWatchlistModal from '@app/components/Watchlists/DeleteWatchlistModal';
+import ShareWatchlistModal from '@app/components/Watchlists/ShareWatchlistModal';
 import WatchlistShelf from '@app/components/Watchlists/WatchlistShelf';
 import WatchlistsEmptyState from '@app/components/Watchlists/WatchlistsEmptyState';
 import { useMediaLists } from '@app/domain/mediaLists/hooks/useMediaLists';
 import type { MediaListSummary } from '@app/domain/mediaLists/models/MediaList';
 import { canDeleteList } from '@app/domain/mediaLists/models/MediaList';
+import useRetainedValue from '@app/hooks/useRetainedValue';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
 import { PlusIcon } from '@heroicons/react/24/outline';
@@ -17,9 +20,9 @@ import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistsList', {
   watchlists: 'Watchlists',
-  mylists: 'My lists',
-  sharedwithme: 'Shared with me',
-  newwatchlist: 'New watchlist',
+  mylists: 'My Lists',
+  sharedwithme: 'Shared with Me',
+  newwatchlist: 'New Watchlist',
 });
 
 const WatchlistsList = () => {
@@ -29,6 +32,14 @@ const WatchlistsList = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<MediaListSummary | undefined>();
   const [deleting, setDeleting] = useState<MediaListSummary | undefined>();
+  const [adding, setAdding] = useState<MediaListSummary | undefined>();
+  const [sharing, setSharing] = useState<MediaListSummary | undefined>();
+
+  // Each modal outlives the state that closed it by the length of its leave transition.
+  const editingList = useRetainedValue(editing);
+  const deletingList = useRetainedValue(deleting);
+  const addingList = useRetainedValue(adding);
+  const sharingList = useRetainedValue(sharing);
 
   const { owned, shared } = useMemo(
     () => ({
@@ -74,7 +85,7 @@ const WatchlistsList = () => {
         <div className="flex flex-col gap-6">
           {owned.length > 0 && (
             <section>
-              <h2 className="text-xl font-bold text-gray-300">
+              <h2 className="slider-title">
                 {intl.formatMessage(messages.mylists)}
               </h2>
               <div className="mt-2">
@@ -83,6 +94,8 @@ const WatchlistsList = () => {
                     key={list.id}
                     list={list}
                     onOpenOptions={setEditing}
+                    onAddMedia={setAdding}
+                    onShare={setSharing}
                   />
                 ))}
               </div>
@@ -91,7 +104,7 @@ const WatchlistsList = () => {
 
           {shared.length > 0 && (
             <section>
-              <h2 className="text-xl font-bold text-gray-300">
+              <h2 className="slider-title">
                 {intl.formatMessage(messages.sharedwithme)}
               </h2>
               <div className="mt-2">
@@ -101,10 +114,12 @@ const WatchlistsList = () => {
                     list={list}
                     showOwner
                     // A collaborator can rename a list they may write to, so the
-                    // options entry point stays available to them.
+                    // options entry point stays available to them. Sharing is the
+                    // owner's alone and has no entry point here.
                     onOpenOptions={
                       list.role === 'write' ? setEditing : undefined
                     }
+                    onAddMedia={setAdding}
                   />
                 ))}
               </div>
@@ -121,7 +136,7 @@ const WatchlistsList = () => {
 
       <CreateEditWatchlistModal
         show={!!editing}
-        list={editing}
+        list={editingList}
         onComplete={() => setEditing(undefined)}
         onCancel={() => setEditing(undefined)}
         onRequestDelete={() => {
@@ -134,10 +149,29 @@ const WatchlistsList = () => {
 
       <DeleteWatchlistModal
         show={!!deleting}
-        list={deleting}
+        list={deletingList}
         onComplete={() => setDeleting(undefined)}
         onCancel={() => setDeleting(undefined)}
       />
+
+      {/* Adding and sharing both act on one list, so the modals are rendered once here
+          rather than once per shelf. */}
+      {addingList && (
+        <AddMediaModal
+          show={!!adding}
+          mediaListId={addingList.id}
+          onComplete={() => setAdding(undefined)}
+          onCancel={() => setAdding(undefined)}
+        />
+      )}
+
+      {sharingList && (
+        <ShareWatchlistModal
+          show={!!sharing}
+          list={sharingList}
+          onCancel={() => setSharing(undefined)}
+        />
+      )}
     </>
   );
 };

@@ -2173,12 +2173,25 @@ components:
         - $ref: '#/components/schemas/MediaListItemRef'
         - type: object
           properties:
+            id:
+              type: number
+              example: 12
             posterPath:
               type: string
               nullable: true
               example: '/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg'
+            watched:
+              type: boolean
+              example: false
+            status:
+              type: number
+              nullable: true
+              example: 5
           required:
+            - id
             - posterPath
+            - watched
+            - status
     MediaListSeasonProgress:
       type: object
       properties:
@@ -2301,7 +2314,16 @@ components:
         position:
           type: number
           example: 0
+        status:
+          description: >-
+            Availability in the library. Null when nothing in the app has ever
+            tracked the title.
+          type: number
+          nullable: true
+          example: 5
         addedBy:
+          # The validator rejects "nullable" beside a $ref, so the null case is stated
+          # here rather than declared. Responses do send null.
           description: Null once the person who added the title is deleted.
           $ref: '#/components/schemas/MediaListUser'
         createdAt:
@@ -2326,6 +2348,7 @@ components:
         - posterPath
         - year
         - position
+        - status
         - addedBy
         - createdAt
         - watched

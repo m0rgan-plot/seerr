@@ -44,6 +44,9 @@ export interface MediaListPreviewItem {
   posterPath: string | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
   watched: boolean;
+  // Availability in the library, which is what decides between offering a request and
+  // reporting one already in flight.
+  status: MediaListItem['status'];
 }
 
 export interface MediaListSummary {
@@ -243,6 +246,7 @@ export class MediaListViewService {
         tmdbId: view.item.tmdbId,
         mediaType: view.item.mediaType,
         watched: view.watched,
+        status: view.item.status,
         posterPath:
           (
             await this.summaries.getSummary(

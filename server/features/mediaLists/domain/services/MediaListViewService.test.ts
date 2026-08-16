@@ -80,6 +80,7 @@ describe('MediaListViewService', () => {
           mediaType: MediaType.MOVIE,
           posterPath: '/poster-11.jpg',
           watched: false,
+          status: null,
         },
         {
           id: items[1].id,
@@ -87,6 +88,7 @@ describe('MediaListViewService', () => {
           mediaType: MediaType.MOVIE,
           posterPath: '/poster-12.jpg',
           watched: false,
+          status: null,
         },
       ]);
     });

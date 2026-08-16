@@ -15,7 +15,7 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
   public async findById(itemId: number): Promise<MediaListItem | null> {
     const record = await getRepository(MediaListItemRecord).findOne({
       where: { id: itemId },
-      relations: { list: true, addedBy: true },
+      relations: { list: true, addedBy: true, media: true },
     });
     return record ? toMediaListItem(record, record.list.id) : null;
   }
@@ -23,7 +23,9 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
   public async findByList(listId: number): Promise<MediaListItem[]> {
     const records = await getRepository(MediaListItemRecord).find({
       where: { list: { id: listId } },
-      relations: { addedBy: true },
+      // The media row carries the library status the cards need, and it is a join on a
+      // query that already runs rather than a lookup per title.
+      relations: { addedBy: true, media: true },
       order: { position: 'ASC', id: 'ASC' },
     });
     return records.map((record) => toMediaListItem(record, listId));
@@ -36,7 +38,7 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
   ): Promise<MediaListItem | null> {
     const record = await getRepository(MediaListItemRecord).findOne({
       where: { list: { id: listId }, tmdbId, mediaType },
-      relations: { addedBy: true },
+      relations: { addedBy: true, media: true },
     });
     return record ? toMediaListItem(record, listId) : null;
   }
