@@ -11,6 +11,7 @@ import type { Collaborator } from '@server/features/mediaLists/domain/entities/C
 import { DuplicateCollaboratorError } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { In } from 'typeorm';
 
 export class TypeOrmMediaListCollaboratorRepository implements MediaListCollaboratorRepository {
   public async findByList(listId: number): Promise<Collaborator[]> {
@@ -20,6 +21,31 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
       order: { createdAt: 'ASC' },
     });
     return records.map(toCollaborator);
+  }
+
+  // One query for every list the caller can see, rather than one per list, which is
+  // what the index summary needs to avoid deepening its documented N+1.
+  public async findByLists(
+    listIds: number[]
+  ): Promise<Map<number, Collaborator[]>> {
+    const byList = new Map<number, Collaborator[]>();
+    if (listIds.length === 0) {
+      return byList;
+    }
+
+    const records = await getRepository(MediaListCollaboratorRecord).find({
+      where: { list: { id: In(listIds) } },
+      relations: { user: true, invitedBy: true, list: true },
+      order: { createdAt: 'ASC' },
+    });
+
+    records.forEach((record) => {
+      const collaborators = byList.get(record.list.id) ?? [];
+      collaborators.push(toCollaborator(record));
+      byList.set(record.list.id, collaborators);
+    });
+
+    return byList;
   }
 
   public async findRole(

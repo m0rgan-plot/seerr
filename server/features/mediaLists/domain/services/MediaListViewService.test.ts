@@ -176,6 +176,41 @@ describe('MediaListViewService', () => {
         []
       );
     });
+
+    it('reports who each list is shared with', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.deepStrictEqual(
+        summary.sharedWith.map((collaborator) => collaborator.id).sort(),
+        [WRITER.id, READER.id].sort()
+      );
+    });
+
+    // The index summary is documented as N+1-prone (server/features/mediaLists/domain
+    // read path). Collaborators must be fetched once for every visible list, not once
+    // per list, or this feature would deepen that problem.
+    it('fetches collaborators for every visible list in a single batched call', async () => {
+      const harness = buildHarness();
+      const first = await harness.seedSharedList();
+      const second = await harness.listService.create({
+        name: 'Second list',
+        description: null,
+        ownerId: OWNER.id,
+      });
+      harness.collaborators.findByListsCalls.length = 0;
+
+      const summaries = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(summaries.length, 2);
+      assert.strictEqual(harness.collaborators.findByListsCalls.length, 1);
+      assert.deepStrictEqual(
+        harness.collaborators.findByListsCalls[0].sort(),
+        [first.id, second.id].sort()
+      );
+    });
   });
 
   describe('what each screen resolves', () => {

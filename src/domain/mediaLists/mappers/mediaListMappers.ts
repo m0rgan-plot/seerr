@@ -54,6 +54,8 @@ export const toMediaListSummary = (
     watched: item.watched,
     status: item.status,
   })),
+  sharedWith: dto.sharedWith.map(toUser),
+  sharedWithCount: dto.sharedWithCount,
 });
 
 export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({

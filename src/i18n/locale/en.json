@@ -1731,6 +1731,8 @@
   "components.Watchlists.WatchlistSeasonRow.season": "Season {number}",
   "components.Watchlists.WatchlistSeasonRow.someseen": "{count} seen",
   "components.Watchlists.WatchlistSeasonRow.unmarkseason": "Mark Season Unseen",
+  "components.Watchlists.WatchlistSharedWithAvatars.more": "+{count}",
+  "components.Watchlists.WatchlistSharedWithAvatars.sharedwith": "Shared with {names}",
   "components.Watchlists.WatchlistShelf.byowner": "by {name}",
   "components.Watchlists.WatchlistShelf.edit": "Edit {name}",
   "components.Watchlists.WatchlistShelf.seencount": "{count} seen",

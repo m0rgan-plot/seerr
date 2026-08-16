@@ -519,6 +519,31 @@ describe('media list repositories', () => {
       assert.strictEqual(all[0].invitedBy?.id, owner.id);
     });
 
+    it('batches collaborators across lists, keyed by list id, in one query', async () => {
+      const { list: first, owner, friend } = await seedList();
+      const second = await lists.create({
+        name: 'Second list',
+        description: null,
+        ownerId: owner.id,
+      });
+      await collaborators.add({
+        listId: first.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const byList = await collaborators.findByLists([first.id, second.id]);
+
+      assert.strictEqual(byList.get(first.id)?.length, 1);
+      assert.strictEqual(byList.get(first.id)?.[0].user.id, friend.id);
+      assert.strictEqual(byList.has(second.id), false);
+    });
+
+    it('returns an empty map for an empty batch', async () => {
+      assert.deepStrictEqual(await collaborators.findByLists([]), new Map());
+    });
+
     it('removes a collaborator', async () => {
       const { list, owner, friend } = await seedList();
       await collaborators.add({

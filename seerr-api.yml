@@ -2280,10 +2280,23 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/MediaListPreviewItem'
+            sharedWith:
+              type: array
+              description: >-
+                Who the list is shared with, for the shelf row's avatar badges. Capped
+                to a handful of entries server-side; see sharedWithCount for the true
+                total.
+              items:
+                $ref: '#/components/schemas/MediaListUser'
+            sharedWithCount:
+              type: number
+              example: 2
           required:
             - itemCount
             - seenCount
             - previewItems
+            - sharedWith
+            - sharedWithCount
     MediaListItem:
       type: object
       properties:
