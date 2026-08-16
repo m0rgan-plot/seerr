@@ -123,6 +123,35 @@ class EmailAgent
       };
     }
 
+    // Watchlist notifications carry neither a request nor an issue, so they need their
+    // own branch. Without one they fall through to the undefined at the end of this
+    // method and are silently never sent.
+    if (
+      type === Notification.MEDIA_LIST_SHARED ||
+      type === Notification.MEDIA_LIST_ITEM_ADDED
+    ) {
+      return {
+        template: path.join(__dirname, '../../../templates/email/media-list'),
+        message: {
+          to: recipientEmail,
+        },
+        locals: {
+          event: payload.event,
+          listName: payload.subject,
+          body: payload.message,
+          extra: payload.extra ?? [],
+          actionUrl: applicationUrl
+            ? `${applicationUrl}/watchlists`
+            : undefined,
+          applicationUrl,
+          applicationTitle,
+          logoUrl,
+          recipientName,
+          recipientEmail,
+        },
+      };
+    }
+
     const mediaType = payload.media
       ? payload.media.mediaType === MediaType.MOVIE
         ? intl.formatMessage(globalMessages.movie)
