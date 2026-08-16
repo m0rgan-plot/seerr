@@ -79,6 +79,13 @@ const friendId = async () =>
     })
   ).id;
 
+const ownerId = async () =>
+  (
+    await getRepository(User).findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    })
+  ).id;
+
 async function createList(agent: request.Agent, name = 'Sunday Night Sci-Fi') {
   const res = await agent
     .post('/mediaLists')
@@ -385,6 +392,25 @@ describe('media list routes', () => {
       // The owner sees who has finished it.
       assert.strictEqual(forOwner.body[0].seenBy.length, 1);
       assert.strictEqual(forOwner.body[0].seenBy[0].id, await friendId());
+    });
+
+    // The owner holds no collaborator row, so resolving seen-by against the collaborator
+    // table alone drops the badge of the person who created the list.
+    it('shows the owner among the members who have seen a title', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+      const item = await addMovie(owner, list.id);
+
+      await owner.post(`/mediaLists/${list.id}/items/${item.id}/watched`);
+
+      const forFriend = await friend.get(`/mediaLists/${list.id}/items`);
+
+      assert.deepStrictEqual(
+        forFriend.body[0].seenBy.map((member: { id: number }) => member.id),
+        [await ownerId()]
+      );
     });
 
     it('unmarks a movie', async () => {

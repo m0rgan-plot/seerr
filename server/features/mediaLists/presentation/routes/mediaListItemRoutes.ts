@@ -24,7 +24,7 @@ router.get('/', async (req, res, next) => {
     const { views } = getMediaListServices();
 
     const items = await views.itemViewsFor(listId, req.user!.id, filter);
-    const members = await views.collaboratorsFor(listId);
+    const members = await views.membersFor(listId);
 
     // Resolving the seen-by ids once for the whole page rather than per item.
     const byId = new Map(members.map((member) => [member.id, member]));

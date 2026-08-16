@@ -25,11 +25,15 @@ export class MediaListItemRecord {
   @Index()
   public list: MediaListRecord;
 
+  // Media is shared with requests and issues and is deleted by routine admin actions
+  // such as blocklisting. Cascading from there would take the list entry with it, and
+  // with it every member's episode history, so the link is dropped instead.
   @ManyToOne(() => Media, {
-    onDelete: 'CASCADE',
+    onDelete: 'SET NULL',
+    nullable: true,
   })
   @Index()
-  public media: Media;
+  public media?: Media | null;
 
   @Column()
   @Index()

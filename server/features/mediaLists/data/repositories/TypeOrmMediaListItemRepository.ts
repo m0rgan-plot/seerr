@@ -5,7 +5,9 @@ import { User } from '@server/entity/User';
 import { toMediaListItem } from '@server/features/mediaLists/data/mappers/mediaListItemMapper';
 import MediaListItemRecord from '@server/features/mediaLists/data/orm/MediaListItemRecord';
 import MediaListRecord from '@server/features/mediaLists/data/orm/MediaListRecord';
+import { rethrowAsDomainError } from '@server/features/mediaLists/data/repositories/constraintErrors';
 import type { MediaListItem } from '@server/features/mediaLists/domain/entities/MediaListItem';
+import { DuplicateMediaListItemError } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type {
   AddMediaListItemInput,
   MediaListItemRepository,
@@ -71,18 +73,22 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
       .where('item.listId = :listId', { listId: input.listId })
       .getRawOne<{ max: number | null }>();
 
-    const saved = await itemRepository.save(
-      new MediaListItemRecord({
-        list,
-        media,
-        tmdbId: input.tmdbId,
-        mediaType: input.mediaType,
-        position: (highest?.max ?? -1) + 1,
-        addedBy,
-      })
-    );
+    try {
+      const saved = await itemRepository.save(
+        new MediaListItemRecord({
+          list,
+          media,
+          tmdbId: input.tmdbId,
+          mediaType: input.mediaType,
+          position: (highest?.max ?? -1) + 1,
+          addedBy,
+        })
+      );
 
-    return toMediaListItem(saved, input.listId);
+      return toMediaListItem(saved, input.listId);
+    } catch (error) {
+      rethrowAsDomainError(error, new DuplicateMediaListItemError());
+    }
   }
 
   public async remove(itemId: number): Promise<void> {

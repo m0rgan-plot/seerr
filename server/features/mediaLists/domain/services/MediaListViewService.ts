@@ -125,9 +125,19 @@ export class MediaListViewService {
     return views.filter((view) => this.matchesFilter(view, filter));
   }
 
-  public async collaboratorsFor(listId: number): Promise<UserRef[]> {
-    const collaborators = await this.collaborators.findByList(listId);
-    return collaborators.map((collaborator) => collaborator.user);
+  // Everyone whose watch state can show up on the list. The owner is deliberately not a
+  // collaborator row, so asking the collaborator table alone would drop the seen-by
+  // badge of the person who created the list.
+  public async membersFor(listId: number): Promise<UserRef[]> {
+    const [list, collaborators] = await Promise.all([
+      this.listService.requireList(listId),
+      this.collaborators.findByList(listId),
+    ]);
+
+    return [
+      list.owner,
+      ...collaborators.map((collaborator) => collaborator.user),
+    ];
   }
 
   private matchesFilter(
