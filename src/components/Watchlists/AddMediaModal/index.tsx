@@ -217,6 +217,7 @@ const AddMediaModal = ({
                 </div>
 
                 <Button
+                  data-testid="watchlist-add-result"
                   buttonType={isAdded ? 'success' : 'default'}
                   buttonSize="sm"
                   disabled={isAdded || pending === key}
