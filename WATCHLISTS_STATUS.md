@@ -264,15 +264,56 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 - `assertCanView` was written and then deleted: nothing called it and it duplicated the
   check `listFor` already performs. Caught by the coverage pass.
 
-## Open follow-ups
+## Post-implementation audit and follow-ups (2026-08-16)
 
-- **From review (2026-08-15), for a follow-up PR:** clicking a title on the watchlist detail
-  page should open that media's page; the "Mark seen" and "Episodes" buttons do not match the
-  height of the reused "Request" button.
+The feature was audited after the fact against the original request, the plan, the
+codebase conventions and CONTRIBUTING.md. Findings and the remediation plan live in
+`~/.claude/plans/task-notification-task-id-a22be853913ab-curried-metcalfe.md`. Two
+follow-up branches came out of it, both draft PRs off milestone 10:
 
+- **PR #12, `fix/watchlists-12-server-bugs`** — six server defects. A TMDB failure in the
+  season-count provider permanently 500'd any list holding an unresolvable title; the list
+  owner never appeared in `seenBy`; duplicate add and share races returned 500 with the
+  driver message instead of 409; a throwing notification agent turned a committed write
+  into a 500; neither the email nor the web push agent could render the two watchlist
+  notification types, so they were silently undeliverable; and `media_list_item` cascaded
+  from `media`, so blocklisting a title deleted the list entry and every member's watch
+  history. The last one carries a migration on both drivers, verified up and down against
+  sqlite and a throwaway postgres 16.
+- **PR #13, `feat/watchlists-11-review-fixes`** — the review remarks plus the frontend
+  defects. Cards rebuilt on the app's own poster pattern (`cards-vertical`, hover overlay,
+  `Common/Button` throughout), media-page links, add and share from the index, padded
+  episode labels, release dates in search. The load-bearing fix underneath: every write
+  blanked the SWR cache, because `refreshList` passed a third argument to `mutate` and so
+  left the revalidate-only path, which is why the episode accordion collapsed on each tick.
+
+Decisions taken during that work:
+
+- **Watchlist cards do not use `RequestButton`.** It needs a full `Media` entity with its
+  requests to decide what to offer, and a list carries a status and nothing more. Given
+  less it unconditionally offers "Request", including for available titles. The cards use
+  `RequestModal` directly, the way `TitleCard` does, through a shared
+  `WatchlistRequestButton`. This closes the open question below about the two variants.
+- **`media_list_item.media` is relaxed to `SET NULL` rather than dropped**, even though
+  nothing read it before: availability on a list entry is the obvious next use, and
+  re-adding the column later would cost another migration. It now feeds the status badge.
+- **`nullable` beside a `$ref` in `seerr-api.yml` breaks the whole API at boot.** The
+  correct-looking OpenAPI 3.0 idiom is rejected by `express-openapi-validator`, and the
+  spec-parity test does not catch it because it never boots the server. Nullability on
+  `$ref` fields is documented in the description instead.
+
+Still open:
+
+- Items and index endpoints are not paginated. The plan specified `?take&skip` mirroring
+  `request.ts`; it was never built and never flagged. It cannot be retrofitted client-first
+  either, since undeclared query parameters are a hard 400. Decide before the API is
+  treated as stable.
+- The N+1 on the index (per-list watch queries, up to 7 TMDB poster lookups per list with
+  no cross-list dedupe) is understood and unaddressed.
+- Upstreaming would require personally owning the code and rewriting the PR descriptions on
+  the upstream template with the AI disclosure. Upstream bans AI-driven contributions
+  outright, so this is a real constraint rather than a formality.
 - Design pass needed for the drag-reorder affordance (blocks part of milestone 7).
 - Frame 1g's "Who can find it" section should be removed from the design (deferred to v2).
-- Confirm the existing `RequestButton` covers both the labelled (row) and icon-only (grid) variants
-  before adding a new one.
 - Frontend mapper unit tests have no runner today; plan keeps the frontend logic-free and relies on
   Cypress. Adding Vitest is an open option if mapper-level tests are wanted.
