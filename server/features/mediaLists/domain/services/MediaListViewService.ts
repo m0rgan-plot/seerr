@@ -37,10 +37,13 @@ export interface MediaListItemView {
 }
 
 export interface MediaListPreviewItem {
+  id: number;
   tmdbId: number;
   mediaType: MediaListItem['mediaType'];
   // Null when TMDB has no art, or no longer knows the title.
   posterPath: string | null;
+  // The requesting member's own state, so the poster strip can offer the right CTA.
+  watched: boolean;
 }
 
 export interface MediaListSummary {
@@ -92,7 +95,7 @@ export class MediaListViewService {
           itemCount: items.length,
           seenCount: views.filter((view) => view.watched).length,
           previewItems: await this.buildPreview(
-            items.slice(0, PREVIEW_ITEM_COUNT)
+            views.slice(0, PREVIEW_ITEM_COUNT)
           ),
         };
       })
@@ -232,15 +235,21 @@ export class MediaListViewService {
   }
 
   private async buildPreview(
-    items: MediaListItem[]
+    views: MediaListItemView[]
   ): Promise<MediaListPreviewItem[]> {
     return Promise.all(
-      items.map(async (item) => ({
-        tmdbId: item.tmdbId,
-        mediaType: item.mediaType,
+      views.map(async (view) => ({
+        id: view.item.id,
+        tmdbId: view.item.tmdbId,
+        mediaType: view.item.mediaType,
+        watched: view.watched,
         posterPath:
-          (await this.summaries.getSummary(item.tmdbId, item.mediaType))
-            ?.posterPath ?? null,
+          (
+            await this.summaries.getSummary(
+              view.item.tmdbId,
+              view.item.mediaType
+            )
+          )?.posterPath ?? null,
       }))
     );
   }

@@ -12,10 +12,13 @@ export interface MediaListUser {
 }
 
 export interface MediaListRef {
+  id: number;
   tmdbId: number;
   mediaType: MediaType;
   // Relative TMDB path, or null when there is no art for the title.
   posterPath: string | null;
+  // The signed-in member's own state, so hover CTAs know which action to offer.
+  watched: boolean;
 }
 
 export interface MediaList {
