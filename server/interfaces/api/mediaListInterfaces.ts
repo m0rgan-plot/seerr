@@ -73,6 +73,7 @@ export interface MediaListItem {
   status: MediaStatus | null;
   addedBy: MediaListUser | null;
   createdAt: string;
+  updatedAt: string;
   // The requesting member's own state. Null progress means the title is a movie.
   watched: boolean;
   progress: MediaListShowProgress | null;

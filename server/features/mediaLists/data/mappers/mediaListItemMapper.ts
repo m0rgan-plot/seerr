@@ -16,4 +16,5 @@ export const toMediaListItem = (
   status: record.media?.status ?? null,
   addedBy: toOptionalUserRef(record.addedBy),
   createdAt: record.createdAt,
+  updatedAt: record.updatedAt,
 });
