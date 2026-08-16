@@ -7,12 +7,7 @@ import type { MediaListRef } from '@app/domain/mediaLists/models/MediaList';
 import { useIsTouch } from '@app/hooks/useIsTouch';
 import useToasts from '@app/hooks/useToasts';
 import defineMessages from '@app/utils/defineMessages';
-import {
-  EyeIcon,
-  EyeSlashIcon,
-  PlusIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { MediaStatus } from '@server/constants/media';
 import Link from 'next/link';
 import { useIntl } from 'react-intl';
@@ -81,7 +76,7 @@ const WatchlistPosterStrip = ({
       {previewItems.map((item) => (
         <div
           key={`${item.mediaType}-${item.tmdbId}`}
-          className="group relative aspect-[2/3] w-[108px] flex-none overflow-hidden rounded-lg shadow ring-1 ring-gray-700 transition duration-150 hover:ring-gray-500"
+          className="group relative aspect-[2/3] w-[108px] flex-none transform-gpu overflow-hidden rounded-lg shadow ring-1 ring-gray-700 transition duration-150 hover:scale-105 hover:shadow-lg hover:ring-gray-500"
         >
           <Link
             href={
@@ -116,14 +111,14 @@ const WatchlistPosterStrip = ({
             <div className="pointer-events-none absolute inset-0 flex flex-col justify-between bg-gray-900 bg-opacity-0 p-1.5 opacity-0 transition duration-150 group-hover:bg-opacity-70 group-hover:opacity-100">
               <div className="pointer-events-auto flex justify-end gap-1">
                 <Button
-                  buttonType={item.watched ? 'success' : 'default'}
+                  buttonType="ghost"
                   buttonSize="sm"
                   onClick={() => onToggleSeen(item)}
                   title={intl.formatMessage(
                     item.watched ? messages.markunseen : messages.markseen
                   )}
                 >
-                  {item.watched ? <EyeIcon /> : <EyeSlashIcon />}
+                  <CheckIcon />
                 </Button>
 
                 <Button

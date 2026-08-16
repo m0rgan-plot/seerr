@@ -10,8 +10,6 @@ import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
 import {
   CheckIcon,
-  EyeIcon,
-  EyeSlashIcon,
   ListBulletIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
@@ -76,7 +74,7 @@ const WatchlistItemCard = ({
         className={`relative w-full transform-gpu cursor-default overflow-hidden rounded-xl bg-gray-800 bg-cover outline-none ring-1 transition duration-300 ${
           showDetail
             ? 'scale-105 shadow-lg ring-gray-500'
-            : 'scale-100 ring-gray-700'
+            : 'scale-100 shadow ring-gray-700'
         }`}
         style={{ paddingBottom: '150%' }}
         onMouseEnter={() => {
@@ -146,7 +144,7 @@ const WatchlistItemCard = ({
                 <div className="z-40 flex flex-col gap-1">
                   <Button
                     data-testid="watchlist-item-seen-toggle"
-                    buttonType={item.watched ? 'success' : 'ghost'}
+                    buttonType="ghost"
                     buttonSize="sm"
                     onClick={(e) => {
                       e.preventDefault();
@@ -156,11 +154,7 @@ const WatchlistItemCard = ({
                       item.watched ? messages.markunseen : messages.markseen
                     )}
                   >
-                    {item.watched ? (
-                      <EyeIcon className="h-3" />
-                    ) : (
-                      <EyeSlashIcon className="h-3" />
-                    )}
+                    <CheckIcon className="h-3" />
                   </Button>
 
                   {canEdit && (
