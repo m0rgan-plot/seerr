@@ -264,6 +264,50 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 - `assertCanView` was written and then deleted: nothing called it and it duplicated the
   check `listFor` already performs. Caught by the coverage pass.
 
+## PR #14, `feat/watchlists-13-hover-and-mark-seen-polish` (2026-08-16)
+
+Live-server feedback on PR #13's build surfaced four more frontend defects. Rather than
+adding them to #13 directly, `fix/watchlists-12-server-bugs` was rebased onto
+`feat/watchlists-11-review-fixes` (no conflicts — the two textual overlaps the audit
+flagged in `MediaListViewService.ts` and `TypeOrmMediaListItemRepository.ts` merged
+cleanly), and this branch stacks on top of the rebased #12 rather than on #11 directly.
+Local only so far: rebase and new branch are not yet pushed, pending confirmation before
+force-pushing #12's already-published history.
+
+- **Card border/ring only visible at the rounded corners.** `WatchlistItemCard`'s idle
+  ring state was missing the `shadow` class that `TitleCard` carries. A bare 1px
+  `ring-gray-700` reads as invisible against the page background on straight edges and
+  only registers at the corners, where the curvature crosses brighter poster art. Added
+  `shadow` to the idle state to match `TitleCard` exactly.
+- **Poster strip had no hover scale.** `WatchlistItemCard` (the detail grid) already had
+  `scale-105` wired through `showDetail`, matching `TitleCard`. `WatchlistPosterStrip`
+  (the index page shelves) never did — its hover only recolored the ring. Added
+  `transform-gpu hover:scale-105 hover:shadow-lg` to match the rest of the app's poster
+  hover treatment.
+- **"Mark as seen" button had no visible hover.** It used `buttonType="success"` when
+  watched, whose hover (`bg-green-500/80` → `bg-green-500`) is nearly imperceptible against
+  an already-solid green fill. Switched both the card and the strip to a plain `ghost`
+  button, matching the Remove/Trash button beside it, whose hover (border-gray-600 →
+  border-gray-200) is clearly visible. The green success fill was redundant anyway: watched
+  state already persists as the corner checkmark badge.
+- **Eye/eye-slash icon read as show/hide, not mark-as-seen.** Replaced both icons with a
+  single `CheckIcon` in both components, used unconditionally — no second "selected" icon
+  variant, since the action is the checkmark and the persistent watched state lives in the
+  corner badge, not on the button.
+
+Verified in the browser against a rebuild (`pnpm build` + server restart): ring visible on
+all four sides, strip posters now enlarge on hover, the seen-toggle button's border
+brightens on hover exactly like the trash button, and both card types show a plain
+checkmark regardless of watched state. `tsc --noEmit` and `eslint` on the changed files are
+clean; no unit or Cypress spec references the removed icons or button types (only the
+stable `data-testid`s).
+
+**Aside, not caused by this session:** the dev database this server points at picked up
+changes mid-session that this session didn't make — "Sunday Night Sci-Fi" (list 23) is now
+named "Sunday Night Thriller" with a new description, and two new empty lists ("Longer TV
+Shows", "Short TV Shows") appeared. Something else has write access to the same dev DB.
+Flagged to the user; not investigated further since it's outside this branch's scope.
+
 ## Post-implementation audit and follow-ups (2026-08-16)
 
 The feature was audited after the fact against the original request, the plan, the
