@@ -2329,6 +2329,12 @@ components:
         createdAt:
           type: string
           example: '2026-08-15T03:00:00.000Z'
+        updatedAt:
+          description: >-
+            Bumped by adding the item or reordering the list, not by any member's
+            watched state.
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
         watched:
           type: boolean
           example: false
@@ -2351,6 +2357,7 @@ components:
         - status
         - addedBy
         - createdAt
+        - updatedAt
         - watched
         - progress
         - seenBy

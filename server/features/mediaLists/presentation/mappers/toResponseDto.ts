@@ -83,6 +83,7 @@ export const toMediaListItemDto = (
   status: view.item.status,
   addedBy: toOptionalUser(view.item.addedBy),
   createdAt: view.item.createdAt.toISOString(),
+  updatedAt: view.item.updatedAt.toISOString(),
   watched: view.watched,
   progress: view.progress,
   seenBy: seenBy.map(toUser),

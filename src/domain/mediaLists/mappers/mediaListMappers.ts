@@ -68,6 +68,7 @@ export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
   status: dto.status,
   addedBy: toOptionalUser(dto.addedBy),
   createdAt: new Date(dto.createdAt),
+  updatedAt: new Date(dto.updatedAt),
   watched: dto.watched,
   progress: dto.progress
     ? {

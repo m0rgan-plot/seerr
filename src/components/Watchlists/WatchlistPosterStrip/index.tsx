@@ -1,20 +1,16 @@
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
-import StatusBadgeMini from '@app/components/Common/StatusBadgeMini';
+import RemoveWatchlistItemModal from '@app/components/Watchlists/RemoveWatchlistItemModal';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
+import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import type { MediaListRef } from '@app/domain/mediaLists/models/MediaList';
 import { useIsTouch } from '@app/hooks/useIsTouch';
 import useToasts from '@app/hooks/useToasts';
 import defineMessages from '@app/utils/defineMessages';
-import {
-  EyeIcon,
-  EyeSlashIcon,
-  PlusIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
-import { MediaStatus } from '@server/constants/media';
+import { CheckIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistPosterStrip', {
@@ -49,6 +45,11 @@ const WatchlistPosterStrip = ({
   const isTouch = useIsTouch();
   const { addToast } = useToasts();
   const { setMovieWatched, removeItem } = useMediaListMutations(listId);
+  const [removing, setRemoving] = useState<MediaListRef | null>(null);
+  // Touch has no hover, so a tap stands in for it: the first tap on a poster reveals
+  // its actions instead of navigating, and a second tap (or a tap elsewhere) proceeds
+  // normally. Keyed rather than boolean so revealing one poster hides any other.
+  const [tappedKey, setTappedKey] = useState<string | null>(null);
 
   const onToggleSeen = async (item: MediaListRef) => {
     try {
@@ -77,81 +78,11 @@ const WatchlistPosterStrip = ({
   };
 
   return (
-    <div className="flex gap-3 overflow-hidden">
-      {previewItems.map((item) => (
-        <div
-          key={`${item.mediaType}-${item.tmdbId}`}
-          className="group relative aspect-[2/3] w-[108px] flex-none overflow-hidden rounded-lg shadow ring-1 ring-gray-700 transition duration-150 hover:ring-gray-500"
-        >
-          <Link
-            href={
-              item.mediaType === 'tv'
-                ? `/tv/${item.tmdbId}`
-                : `/movie/${item.tmdbId}`
-            }
-            className="absolute inset-0"
-          >
-            {item.posterPath ? (
-              <CachedImage
-                type="tmdb"
-                src={`https://image.tmdb.org/t/p/w300_and_h450_face${item.posterPath}`}
-                alt=""
-                fill
-                className="object-cover"
-              />
-            ) : (
-              <div className="h-full w-full bg-gray-800" />
-            )}
-          </Link>
-
-          {/* Status is worth seeing without hovering, the same way it is on a title
-              card, so it sits outside the overlay below. */}
-          {!!item.status && item.status !== MediaStatus.UNKNOWN && (
-            <div className="pointer-events-none absolute right-1.5 top-1.5 z-40 flex">
-              <StatusBadgeMini status={item.status} shrink />
-            </div>
-          )}
-
-          {canAdd && !isTouch && (
-            <div className="pointer-events-none absolute inset-0 flex flex-col justify-between bg-gray-900 bg-opacity-0 p-1.5 opacity-0 transition duration-150 group-hover:bg-opacity-70 group-hover:opacity-100">
-              <div className="pointer-events-auto flex justify-end gap-1">
-                <Button
-                  buttonType={item.watched ? 'success' : 'default'}
-                  buttonSize="sm"
-                  onClick={() => onToggleSeen(item)}
-                  title={intl.formatMessage(
-                    item.watched ? messages.markunseen : messages.markseen
-                  )}
-                >
-                  {item.watched ? <EyeIcon /> : <EyeSlashIcon />}
-                </Button>
-
-                <Button
-                  buttonType="danger"
-                  buttonSize="sm"
-                  onClick={() => onRemove(item)}
-                  title={intl.formatMessage(messages.remove)}
-                >
-                  <XMarkIcon />
-                </Button>
-              </div>
-
-              <div className="pointer-events-auto flex justify-center">
-                <WatchlistRequestButton
-                  tmdbId={item.tmdbId}
-                  mediaType={item.mediaType}
-                  status={item.status}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-
+    <div className="flex gap-3 overflow-x-auto p-2">
       {canAdd && (
         // A dashed drop-target tile rather than a Button: it is sized like the posters
-        // beside it, which no button size would give.
+        // beside it, which no button size would give. First in the row, since that is
+        // where a newly added title lands once the list re-sorts to show it.
         <button
           type="button"
           onClick={onAdd}
@@ -163,11 +94,116 @@ const WatchlistPosterStrip = ({
         </button>
       )}
 
+      {previewItems.map((item) => {
+        const key = `${item.mediaType}-${item.tmdbId}`;
+        const tapped = isTouch && tappedKey === key;
+
+        return (
+          <div
+            key={key}
+            className="group relative aspect-[2/3] w-[108px] flex-none transform-gpu overflow-hidden rounded-lg shadow ring-1 ring-gray-700 transition duration-150 hover:scale-105 hover:ring-gray-500"
+          >
+            <Link
+              href={
+                item.mediaType === 'tv'
+                  ? `/tv/${item.tmdbId}`
+                  : `/movie/${item.tmdbId}`
+              }
+              className="absolute inset-0"
+              onClick={(e) => {
+                if (isTouch && canAdd && tappedKey !== key) {
+                  e.preventDefault();
+                  setTappedKey(key);
+                }
+              }}
+            >
+              {item.posterPath ? (
+                <CachedImage
+                  type="tmdb"
+                  src={`https://image.tmdb.org/t/p/w300_and_h450_face${item.posterPath}`}
+                  alt=""
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-gray-800" />
+              )}
+            </Link>
+
+            {/* A quiet stand-in for the status chip below, which only shows once the
+                actions do: on hover for a mouse, on tap for touch. */}
+            {item.status && (
+              <div
+                className={`pointer-events-none absolute bottom-1.5 right-1.5 z-30 transition-opacity duration-150 ${
+                  canAdd && !isTouch ? 'group-hover:opacity-0' : ''
+                } ${tapped ? 'opacity-0' : ''}`}
+              >
+                <WatchlistStatusDot status={item.status} />
+              </div>
+            )}
+
+            {canAdd && (
+              <div
+                className={`pointer-events-none absolute inset-0 flex flex-col justify-between bg-gray-900 p-1.5 transition duration-150 ${
+                  isTouch
+                    ? tapped
+                      ? 'bg-opacity-70 opacity-100'
+                      : 'bg-opacity-0 opacity-0'
+                    : 'bg-opacity-0 opacity-0 group-hover:bg-opacity-70 group-hover:opacity-100'
+                }`}
+              >
+                <div className="pointer-events-auto flex justify-end gap-1">
+                  <Button
+                    buttonType="ghost"
+                    buttonSize="sm"
+                    onClick={() => onToggleSeen(item)}
+                    title={intl.formatMessage(
+                      item.watched ? messages.markunseen : messages.markseen
+                    )}
+                  >
+                    <CheckIcon />
+                  </Button>
+
+                  <Button
+                    buttonType="danger"
+                    buttonSize="sm"
+                    onClick={() => setRemoving(item)}
+                    title={intl.formatMessage(messages.remove)}
+                  >
+                    <TrashIcon />
+                  </Button>
+                </div>
+
+                <div className="pointer-events-auto flex justify-center">
+                  <WatchlistRequestButton
+                    tmdbId={item.tmdbId}
+                    mediaType={item.mediaType}
+                    status={item.status}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
       {previewItems.length === 0 && !canAdd && (
         <span className="self-center text-sm text-gray-500">
           {intl.formatMessage(messages.empty)}
         </span>
       )}
+
+      <RemoveWatchlistItemModal
+        show={!!removing}
+        onConfirm={() => {
+          if (removing) {
+            onRemove(removing);
+          }
+          setRemoving(null);
+        }}
+        onCancel={() => setRemoving(null)}
+      />
     </div>
   );
 };

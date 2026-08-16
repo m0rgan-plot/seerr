@@ -38,6 +38,7 @@ const item: MediaListItem = {
   status: null,
   addedBy: null,
   createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 const capture = () => {

@@ -169,45 +169,49 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       ) : items && items.length > 0 ? (
         <>
           <ul className="cards-vertical">
-            {items.map((item) => (
-              <li key={item.id}>
-                <WatchlistItemCard
-                  item={item}
-                  canEdit={canEdit}
-                  episodesOpen={trackingItemId === item.id}
-                  onToggleSeen={async () => {
-                    try {
-                      await setMovieWatched(item.id, !item.watched);
-                    } catch {
-                      addToast(intl.formatMessage(messages.seenfailed), {
-                        appearance: 'error',
-                        autoDismiss: true,
-                      });
+            {/* Most recently added or reordered first. Watching an item never touches
+                this timestamp, so ticking one off doesn't reshuffle the grid. */}
+            {[...items]
+              .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+              .map((item) => (
+                <li key={item.id}>
+                  <WatchlistItemCard
+                    item={item}
+                    canEdit={canEdit}
+                    episodesOpen={trackingItemId === item.id}
+                    onToggleSeen={async () => {
+                      try {
+                        await setMovieWatched(item.id, !item.watched);
+                      } catch {
+                        addToast(intl.formatMessage(messages.seenfailed), {
+                          appearance: 'error',
+                          autoDismiss: true,
+                        });
+                      }
+                    }}
+                    onOpenEpisodes={() =>
+                      setTrackingItemId((current) =>
+                        current === item.id ? null : item.id
+                      )
                     }
-                  }}
-                  onOpenEpisodes={() =>
-                    setTrackingItemId((current) =>
-                      current === item.id ? null : item.id
-                    )
-                  }
-                  onRemove={async () => {
-                    try {
-                      await removeItem(item.id);
-                      addToast(intl.formatMessage(messages.removed), {
-                        appearance: 'success',
-                        autoDismiss: true,
-                      });
-                    } catch {
-                      addToast(intl.formatMessage(messages.removefailed), {
-                        appearance: 'error',
-                        autoDismiss: true,
-                      });
-                    }
-                  }}
-                  onRequestUpdate={revalidate}
-                />
-              </li>
-            ))}
+                    onRemove={async () => {
+                      try {
+                        await removeItem(item.id);
+                        addToast(intl.formatMessage(messages.removed), {
+                          appearance: 'success',
+                          autoDismiss: true,
+                        });
+                      } catch {
+                        addToast(intl.formatMessage(messages.removefailed), {
+                          appearance: 'error',
+                          autoDismiss: true,
+                        });
+                      }
+                    }}
+                    onRequestUpdate={revalidate}
+                  />
+                </li>
+              ))}
           </ul>
 
           {/* Below the grid rather than inside it: the columns are laid out by auto-fill
@@ -247,6 +251,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       <AddMediaModal
         show={showAdd}
         mediaListId={mediaListId}
+        mediaListName={list.name}
         onComplete={() => setShowAdd(false)}
         onCancel={() => setShowAdd(false)}
       />

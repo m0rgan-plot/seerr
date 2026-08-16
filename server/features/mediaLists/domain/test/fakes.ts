@@ -131,6 +131,7 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
       status: null,
       addedBy: this.users.get(input.addedById) ?? user(input.addedById),
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
     this.items.push(item);
     return item;

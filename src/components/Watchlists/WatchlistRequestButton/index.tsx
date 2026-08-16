@@ -1,5 +1,12 @@
+import Badge from '@app/components/Common/Badge';
 import Button from '@app/components/Common/Button';
+import Tooltip from '@app/components/Common/Tooltip';
 import RequestModal from '@app/components/RequestModal';
+import {
+  statusBadgeTypes,
+  statusMessages,
+} from '@app/components/Watchlists/statusPresentation';
+import WatchlistStatusLegend from '@app/components/Watchlists/WatchlistStatusLegend';
 import globalMessages from '@app/i18n/globalMessages';
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { MediaStatus, MediaType } from '@server/constants/media';
@@ -23,8 +30,7 @@ interface WatchlistRequestButtonProps {
  * offer, and a list carries a status and nothing more. Given only the status, it would
  * offer a request for everything, including titles already available.
  *
- * Renders nothing once the title is spoken for, which is what leaves room for the status
- * badge the caller places instead.
+ * Once a title is spoken for, a status pill takes over the button's spot instead.
  */
 const WatchlistRequestButton = ({
   tmdbId,
@@ -72,6 +78,24 @@ const WatchlistRequestButton = ({
           <ArrowDownTrayIcon />
           <span>{intl.formatMessage(globalMessages.request)}</span>
         </Button>
+      )}
+
+      {!requestable && currentStatus && (
+        <Tooltip
+          content={<WatchlistStatusLegend />}
+          tooltipConfig={{ delayShow: 1000 }}
+        >
+          <button type="button" className={`inline-flex ${className ?? ''}`}>
+            <Badge
+              badgeType={statusBadgeTypes[currentStatus] ?? 'default'}
+              className="!h-auto w-full items-center justify-center py-1"
+            >
+              {intl.formatMessage(
+                statusMessages[currentStatus] ?? globalMessages.unavailable
+              )}
+            </Badge>
+          </button>
+        </Tooltip>
       )}
     </>
   );

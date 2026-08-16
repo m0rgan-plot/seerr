@@ -264,6 +264,172 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 - `assertCanView` was written and then deleted: nothing called it and it duplicated the
   check `listFor` already performs. Caught by the coverage pass.
 
+## PR #14, `feat/watchlists-13-hover-and-mark-seen-polish` (2026-08-16)
+
+Live-server feedback on PR #13's build surfaced four more frontend defects. Rather than
+adding them to #13 directly, `fix/watchlists-12-server-bugs` was rebased onto
+`feat/watchlists-11-review-fixes` (no conflicts — the two textual overlaps the audit
+flagged in `MediaListViewService.ts` and `TypeOrmMediaListItemRepository.ts` merged
+cleanly), and this branch stacks on top of the rebased #12 rather than on #11 directly.
+Local only so far: rebase and new branch are not yet pushed, pending confirmation before
+force-pushing #12's already-published history.
+
+- **Card border/ring only visible at the rounded corners.** `WatchlistItemCard`'s idle
+  ring state was missing the `shadow` class that `TitleCard` carries; added it to match
+  `TitleCard` exactly (`ring-1` + `shadow`). What looked like "still broken" after that
+  fix was screenshot-tooling artifact, not the real page: automated screenshots compress
+  a 1px ring into near-invisibility, so a round of live-DOM experiments chased the width
+  up to `ring`/`ring-2` before a direct user comparison against the Movies grid confirmed
+  the real browser renders `ring-1` fine and the wider rings actually looked heavier than
+  Movies. Settled on byte-for-byte parity with `TitleCard`'s ring classes — trust a direct
+  reference-page comparison over screenshot pixel-peeping for hairline CSS.
+- **Poster strip had no hover scale, and its `overflow-hidden` row clipped the ring.**
+  `WatchlistItemCard` (the detail grid) already had `scale-105` wired through
+  `showDetail`, matching `TitleCard`, because its ancestors are all `overflow: visible`.
+  `WatchlistPosterStrip` sits in a `flex ... overflow-hidden` row (needed so an
+  oversubscribed shelf clips instead of wrapping), which ate the ring and any hover
+  growth with zero clearance. Added `hover:scale-105` plus `p-1` on the row so the ring
+  and the scaled-up hover state both have room without touching the clip boundary.
+- **"Mark as seen" button had no visible hover.** It used `buttonType="success"` when
+  watched, whose hover (`bg-green-500/80` → `bg-green-500`) is nearly imperceptible against
+  an already-solid green fill. Switched both the card and the strip to a plain `ghost`
+  button, matching the Remove/Trash button beside it, whose hover (border-gray-600 →
+  border-gray-200) is clearly visible. The green success fill was redundant anyway: watched
+  state already persists as the corner checkmark badge.
+- **Eye/eye-slash icon read as show/hide, not mark-as-seen.** Replaced both icons with a
+  single `CheckIcon` in both components, used unconditionally — no second "selected" icon
+  variant, since the action is the checkmark and the persistent watched state lives in the
+  corner badge, not on the button.
+
+Verified in the browser against a rebuild (`pnpm build` + server restart): ring visible on
+all four sides, strip posters now enlarge on hover, the seen-toggle button's border
+brightens on hover exactly like the trash button, and both card types show a plain
+checkmark regardless of watched state. `tsc --noEmit` and `eslint` on the changed files are
+clean; no unit or Cypress spec references the removed icons or button types (only the
+stable `data-testid`s).
+
+**Aside, resolved:** list 23 renamed itself to "Sunday Night Thriller" and new lists kept
+appearing mid-session with no corresponding local action. Turned out to be the user
+testing the same running dev server live in their own browser tab throughout this
+session, not a bug — explains the flurry of rapid-fire feedback too.
+
+## PR #14 continued: chip status, sort-by-recency, and more polish (2026-08-16)
+
+Kept iterating against the same running server as the user tested live.
+
+- **Status now reads as a chip, not a button.** The "Processing"-style label that fills
+  the Request button's spot (added earlier this branch) was a hand-styled div that looked
+  clickable. Rebuilt on `Common/Badge` — the same component `SettingsBadge` uses for
+  "Experimental" — with `badgeType` mapped per `MediaStatus` (yellow/pending, indigo/
+  processing, green/available & partially available, red/blocklisted). The redundant
+  corner `StatusBadgeMini` (small circle with a status icon, including the clock the user
+  called out) is gone from both card types now that the chip carries the same
+  information more clearly. Trade-off worth knowing: that corner badge was the only
+  always-visible status signal; the chip only shows on hover (desktop) or not at all on
+  touch, since it lives inside the same hover-revealed action row the Request button
+  always used. Not fixed — flagging in case it matters for mobile users browsing a
+  shared list they can't edit.
+- **`MediaListItem` gained `updatedAt`**, threaded through every layer (domain entity →
+  mapper → DTO → `seerr-api.yml` → frontend model → frontend mapper) the same way
+  `MediaList.updatedAt` already existed. The underlying DB column
+  (`MediaListItemRecord.updatedAt`, a bare `@UpdateDateColumn`) was already there and
+  already had the right semantics for free: watched state lives in a separate
+  `MediaListItemWatchRecord`/`MediaListEpisodeWatchRecord` table per user, so nothing
+  about ticking an episode ever touches the item row. Only `add()` and `applyOrder()`
+  (reorder) save it. That is exactly the sort semantics chosen: **items sort newest
+  add-or-reorder first**, and marking something seen never reshuffles the grid.
+  `WatchlistDetail` now sorts client-side on this field; no pagination or API-shape
+  change needed since the endpoint already returns every item unpaginated.
+- **"+Add" tile moved to the front of the poster strip**, ahead of the previewItems,
+  matching where a newly-added title will land once the list re-sorts to show it.
+- **Add Media dialog now names the list** it's adding to (`mediaListName` prop threaded
+  from both call sites) — was silent about which list was open.
+- **Add Media dialog result titles now link out** (`target="_blank"`) to the title's
+  media page, so browsing search results doesn't require leaving the dialog.
+- **Share dialog's user picker went stale across an open list.** `UserSelector` uses
+  `react-select`'s `cacheOptions`, which persists for the component's lifetime; a user
+  created after the picker first loaded wouldn't appear until something remounted it.
+  `ShareWatchlistModal` now bumps its remount key on every `show` transition, not just
+  after a successful invite.
+- **Sort control added to "My Lists"** (last modified / title / created, default last
+  modified), client-side only — the index endpoint already returns every owned list
+  unpaginated, same reasoning as the item sort above.
+- **The three-dot options button read as a menu but opened a dialog.** Swapped
+  `EllipsisVerticalIcon` for `PencilIcon` on `WatchlistShelf`'s edit entry point, since
+  that's the only thing it does.
+
+**Deferred, by the user's own choice, to a separate planned pass** — both need domain/
+data-layer work and interact with the index N+1 the audit already flagged:
+
+- **Invites as a real pending state.** Design agreed for later: a "Shared with Me →
+  Invites" section at the top of the Watchlists index, styled like Discover's "Recent
+  Requests" cards — no poster grid, just the list name/owner and two icon actions
+  (check to accept, cross to reject). Rejecting is final for now: no un-reject, the owner
+  would just re-invite. Needs a `pending` collaborator state (today `share()` grants
+  access immediately), an accept/reject endpoint pair, and hiding a list from "Shared
+  with Me" until accepted.
+- **Per-list "shared with" avatars on the index.** Showing collaborators directly on each
+  `WatchlistShelf` row (not just inside the Share modal) needs the index response to
+  carry them, which means either a new per-list query in `summariesFor` (worsening the
+  already-flagged N+1) or a batched collaborator lookup — a real backend design question,
+  not a prop threading exercise.
+
+## PR #14 continued again: status color system, delete confirm, mobile parity (2026-08-16)
+
+- **Ring width settled on exact parity with `TitleCard`** (`ring-1`), not a heavier one.
+  The earlier "still just corners" reports turned out to be screenshot-tooling artifact
+  (JPEG compression erases a 1px line; a real browser renders it fine) — confirmed once
+  the user compared this page against Movies directly in their own browser and asked for
+  `ring-1` back after a `ring`/`ring-2` detour. Lesson recorded: trust a live
+  reference-page comparison over automated screenshot pixel-peeping for hairline CSS.
+- **Status color system centralized** in `src/components/Watchlists/statusPresentation.ts`
+  — `statusBadgeTypes`, `statusDotClass`, `statusMessages`, `STATUS_LEGEND_ORDER` — so the
+  hover chip, the always-on corner dot, and the color legend can't drift apart. Partially
+  Available got its own color (gray, via `Badge`'s `light` type) instead of sharing green
+  with Available.
+- **Corner dot is back**, redesigned: a plain colored circle (no icon, no button) at the
+  poster's bottom-right, replacing the clock-bearing `StatusBadgeMini` that was removed
+  earlier this branch. Purely visual — `WatchlistStatusDot` — since the interactive,
+  tooltip-bearing element turned out to need to be the chip, not the dot: the dot
+  disappears the instant a hover would reveal the chip, so a tooltip trigger placed on it
+  was reachable for only a few pixels of the transition. Moved to wrap the chip instead
+  (`WatchlistRequestButton`, chip inside a `<button>` inside `Tooltip`), which is also
+  what stays on screen long enough to actually read.
+- **Color legend on hover**, `WatchlistStatusLegend`: a dot-and-label row per status,
+  reusing the same `statusPresentation` maps. `delayShow: 1000` on the tooltip config so
+  it doesn't flash on every passing hover.
+- **Badge chip was too tall and its text wasn't vertically centered.** The caller was
+  forcing `h-7` onto `Badge`, which has no `align-items` of its own; extra height above
+  the text's own line-height just sat unclaimed at the top. Moved sizing to a wrapping
+  `<button>` (also now the tooltip trigger) and gave `Badge` `items-center !h-auto py-1`,
+  so it sizes to its own content and centers properly regardless of what height the
+  caller's slot wants.
+- **Delete needs confirming.** Both remove entry points (`WatchlistItemCard`'s trash
+  button, `WatchlistPosterStrip`'s) now open `RemoveWatchlistItemModal` — reuses the
+  existing `Modal` component the way `DeleteWatchlistModal` does for whole lists — instead
+  of removing on the first click. The strip only has tmdb ids and art, no title text, so
+  the modal's copy falls back to a generic phrasing when no title is passed.
+- **Strip's remove icon changed from an X to a trash can**, matching the detail grid's
+  button and reading less like "dismiss/cancel" and more like the destructive action it is.
+- **Mobile had no way to reach mark-seen/remove/request in the poster strip at all.** The
+  action overlay was gated `canAdd && !isTouch`, so touch devices never got it — hover
+  literally cannot fire there. Fixed properly (not by leaving it always-on, which was
+  tried and reverted): the strip now tracks which poster was tapped
+  (`tappedKey`) and reveals that one's actions in place of navigating, mirroring how
+  `TitleCard`/`WatchlistItemCard` already treat a tap as an `onClick`-driven reveal on the
+  detail grid. A second tap (or a tap on a different poster) proceeds to navigate/reveal
+  as normal.
+- **Strip couldn't scroll**, so a list with enough preview items to overflow a narrow
+  viewport just clipped them via `overflow-hidden`. Switched to `overflow-x-auto`.
+
+Verified in the browser against a rebuild: `tsc --noEmit` and `eslint` clean across both
+projects, all 373 server tests still green (no server-side behavior changed beyond the
+additive `updatedAt` field from the previous round). Mobile-specific behavior (tap-reveal,
+touch detection) could not be verified live — this session's browser automation is a real
+desktop Chrome without touch emulation, and resizing the window does not change what
+`useIsTouch()` reports. Worth a manual pass on an actual phone or with Chrome's device
+toolbar before calling it done.
+
 ## Post-implementation audit and follow-ups (2026-08-16)
 
 The feature was audited after the fact against the original request, the plan, the

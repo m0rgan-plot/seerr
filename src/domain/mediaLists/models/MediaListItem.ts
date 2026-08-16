@@ -32,6 +32,9 @@ export interface MediaListItem {
   // Null once the person who added it is deleted. The title stays on the list.
   addedBy: MediaListUser | null;
   createdAt: Date;
+  // Bumped only by adding the item or reordering the list, never by watched state.
+  // What the "recently added" default sort orders on.
+  updatedAt: Date;
   // The signed-in member's own state. Progress is null for movies.
   watched: boolean;
   progress: ShowProgress | null;
