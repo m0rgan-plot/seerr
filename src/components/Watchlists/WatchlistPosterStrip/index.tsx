@@ -5,12 +5,13 @@ import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestB
 import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import type { MediaListRef } from '@app/domain/mediaLists/models/MediaList';
+import useClickOutside from '@app/hooks/useClickOutside';
 import { useIsTouch } from '@app/hooks/useIsTouch';
 import useToasts from '@app/hooks/useToasts';
 import defineMessages from '@app/utils/defineMessages';
 import { CheckIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistPosterStrip', {
@@ -50,6 +51,13 @@ const WatchlistPosterStrip = ({
   // its actions instead of navigating, and a second tap (or a tap elsewhere) proceeds
   // normally. Keyed rather than boolean so revealing one poster hides any other.
   const [tappedKey, setTappedKey] = useState<string | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  // A tap outside the whole strip (not just a tap on a different poster, which the
+  // posters' own click handlers already reassign) clears the reveal entirely.
+  useClickOutside(
+    stripRef,
+    useCallback(() => setTappedKey(null), [])
+  );
 
   const onToggleSeen = async (item: MediaListRef) => {
     try {
@@ -78,7 +86,7 @@ const WatchlistPosterStrip = ({
   };
 
   return (
-    <div className="flex gap-3 overflow-x-auto p-2">
+    <div ref={stripRef} className="flex gap-3 overflow-x-auto p-2">
       {canAdd && (
         // A dashed drop-target tile rather than a Button: it is sized like the posters
         // beside it, which no button size would give. First in the row, since that is
