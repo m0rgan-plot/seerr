@@ -968,6 +968,7 @@ router.get<{ id: string }, WatchlistResponse>(
           /*requestedBy: true,media:true*/
         },
         // loadRelationIds: true,
+        order: Watchlist.getSortOrder(req.query.sortBy as string),
         take: itemsPerPage,
         skip: offset,
       });
