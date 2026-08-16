@@ -36,9 +36,9 @@ const shareWithFriend = (listId: number, role: 'read' | 'write') =>
     });
 
 const openCard = (tmdbId: number) => {
-  card(tmdbId)
-    .find('[data-testid=watchlist-item-poster]')
-    .trigger('mouseenter');
+  // React synthesises enter and leave from mouseover and mouseout, so a mouseenter
+  // dispatched on its own never reaches the handler.
+  card(tmdbId).find('[data-testid=watchlist-item-poster]').trigger('mouseover');
   return card(tmdbId);
 };
 
@@ -130,14 +130,21 @@ describe('Watchlists', () => {
         .click();
       cy.get('[data-testid=modal-title]').should('contain', 'Add Media');
       cy.get('#watchlist-add-search').type(MOVIE.title);
-      cy.contains('button', 'Add').click();
-      cy.contains('button', 'Added').should('exist');
+      // Scoped to the result row: the strip behind the modal has an "Add" tile of its
+      // own, and it comes first in the document.
+      cy.get('[data-testid=watchlist-add-result]').first().click();
+      cy.get('[data-testid=watchlist-add-result]')
+        .first()
+        .should('contain', 'Added');
       cy.get('[data-testid=modal-ok-button]').click();
+      // Let the dialog finish leaving, so the next one is the only one on screen.
+      cy.get('[data-testid=modal-title]').should('not.exist');
 
       cy.get('[data-testid=watchlist-shelf] button[title^="Share"]').click();
+      // Modal tags its subtitle with the same testid, so this dialog carries two.
       cy.get('[data-testid=modal-title]')
-        .should('have.length', 1)
-        .and('contain', 'Share Watchlist');
+        .should('contain', 'Share Watchlist')
+        .and('contain', 'Film club');
       cy.contains('People with Access').should('exist');
 
       cy.request(`/api/v1/mediaLists/${listId}/items`)
@@ -280,7 +287,7 @@ describe('Watchlists', () => {
       cy.get('[data-testid=watchlist-collaborator]')
         .should('have.length', 1)
         .and('contain', 'friend')
-        .and('contain', 'Can View');
+        .and('contain', 'Can view');
       cy.contains('People with Access')
         .parent()
         .should('contain', 'admin')
