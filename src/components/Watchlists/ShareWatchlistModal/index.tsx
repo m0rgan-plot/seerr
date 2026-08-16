@@ -1,3 +1,4 @@
+import Button from '@app/components/Common/Button';
 import Modal from '@app/components/Common/Modal';
 import { UserSelector } from '@app/components/Selector';
 import CollaboratorList from '@app/components/Watchlists/CollaboratorList';
@@ -14,7 +15,7 @@ import { useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.ShareWatchlistModal', {
-  title: 'Share watchlist',
+  title: 'Share Watchlist',
   invite: 'Invite',
   canview: 'Can view',
   canedit: 'Can edit',
@@ -53,6 +54,7 @@ const ShareWatchlistModal = ({
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [role, setRole] = useState<CollaboratorRole>('read');
   const [inviting, setInviting] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
 
   const onInvite = async () => {
@@ -68,12 +70,18 @@ const ShareWatchlistModal = ({
         autoDismiss: true,
       });
       setSelectedUserId(null);
+      // The picker takes a default rather than a value, so remounting it is what clears
+      // the person who was just invited.
+      setPickerKey((current) => current + 1);
       revalidate();
     } catch (e) {
       // The server distinguishes these, and each one is worth saying plainly rather
-      // than reporting a generic failure.
+      // than reporting a generic failure. Only the two the user can act on read as
+      // notes; anything else is a failure and should look like one.
       const status = (e as { response?: { status?: number } })?.response
         ?.status;
+      const expected = status === 409 || status === 400;
+
       addToast(
         intl.formatMessage(
           status === 409
@@ -82,7 +90,7 @@ const ShareWatchlistModal = ({
               ? messages.cannotshareowner
               : messages.sharefailed
         ),
-        { appearance: status ? 'info' : 'error', autoDismiss: true }
+        { appearance: expected ? 'info' : 'error', autoDismiss: true }
       );
     } finally {
       setInviting(false);
@@ -110,19 +118,16 @@ const ShareWatchlistModal = ({
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <div className="flex-1">
             <UserSelector
+              key={pickerKey}
               isMulti={false}
-              onChange={(value) =>
-                setSelectedUserId(
-                  value ? Number((value as { value: number }).value) : null
-                )
-              }
+              onChange={(value) => setSelectedUserId(value?.value ?? null)}
             />
           </div>
 
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as CollaboratorRole)}
-            className="rounded-md border border-gray-500 bg-gray-700 py-2 pl-3 pr-8 text-sm text-gray-100"
+            className="short"
           >
             <option value="read">{intl.formatMessage(messages.canview)}</option>
             <option value="write">
@@ -130,14 +135,13 @@ const ShareWatchlistModal = ({
             </option>
           </select>
 
-          <button
-            type="button"
+          <Button
+            buttonType="primary"
             disabled={!selectedUserId || inviting}
             onClick={onInvite}
-            className="rounded-md border border-indigo-500 bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition duration-150 hover:bg-indigo-500 disabled:opacity-50"
           >
-            {intl.formatMessage(messages.invite)}
-          </button>
+            <span>{intl.formatMessage(messages.invite)}</span>
+          </Button>
         </div>
 
         <div className="mt-5">

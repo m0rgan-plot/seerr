@@ -69,21 +69,48 @@ describe('MediaListViewService', () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [11, 12]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
 
       const [summary] = await harness.viewService.summariesFor(OWNER.id);
 
       assert.deepStrictEqual(summary.previewItems, [
         {
+          id: items[0].id,
           tmdbId: 11,
           mediaType: MediaType.MOVIE,
           posterPath: '/poster-11.jpg',
+          watched: false,
+          status: null,
         },
         {
+          id: items[1].id,
           tmdbId: 12,
           mediaType: MediaType.MOVIE,
           posterPath: '/poster-12.jpg',
+          watched: false,
+          status: null,
         },
       ]);
+    });
+
+    it('reports the caller watched state on each preview title', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [21, 22]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.watchService.setMovieWatched(
+        list.id,
+        items[0].id,
+        OWNER.id,
+        true
+      );
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => item.watched),
+        [true, false]
+      );
     });
 
     // Artwork is decoration: a title with no art leaves a gap rather than failing the page.

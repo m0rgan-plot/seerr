@@ -1,4 +1,4 @@
-import type { MediaType } from '@server/constants/media';
+import type { MediaStatus, MediaType } from '@server/constants/media';
 
 // What components work with. Distinct from the wire shape: dates arrive as strings and
 // are parsed once here, so no component has to think about it.
@@ -12,10 +12,15 @@ export interface MediaListUser {
 }
 
 export interface MediaListRef {
+  id: number;
   tmdbId: number;
   mediaType: MediaType;
   // Relative TMDB path, or null when there is no art for the title.
   posterPath: string | null;
+  // The signed-in member's own state, so hover CTAs know which action to offer.
+  watched: boolean;
+  // Availability in the library, which decides what the request CTA says.
+  status: MediaStatus | null;
 }
 
 export interface MediaList {

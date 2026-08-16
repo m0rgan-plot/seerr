@@ -1,5 +1,6 @@
 import type { MediaListUser } from '@app/domain/mediaLists/models/MediaList';
-import type { MediaType } from '@server/constants/media';
+import type { MediaStatus } from '@server/constants/media';
+import { MediaType } from '@server/constants/media';
 
 export interface SeasonProgress {
   seasonNumber: number;
@@ -25,6 +26,9 @@ export interface MediaListItem {
   posterPath: string | null;
   year: number | null;
   position: number;
+  // Availability in the library, which is what tells a request apart from a re-request.
+  // Nothing to do with watched, which is per member.
+  status: MediaStatus | null;
   // Null once the person who added it is deleted. The title stays on the list.
   addedBy: MediaListUser | null;
   createdAt: Date;
@@ -51,7 +55,10 @@ export const episodeKey = ({ seasonNumber, episodeNumber }: EpisodeRef) =>
 
 export type MediaListItemFilter = 'all' | 'unseen' | 'inprogress' | 'seen';
 
-export const isSeries = (item: MediaListItem): boolean => !!item.progress;
+// The media type is the authority here. Progress happens to be present for every series
+// the API returns today, but a series TMDB cannot resolve would read as a movie.
+export const isSeries = (item: MediaListItem): boolean =>
+  item.mediaType === MediaType.TV;
 
 // Started but not finished, which is what the "In progress" filter chip counts.
 export const isInProgress = (item: MediaListItem): boolean =>

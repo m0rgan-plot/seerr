@@ -25,12 +25,13 @@ export const useMediaListMutations = (mediaListId?: number) => {
       Promise.all([
         mutate(api.listKey(listId)),
         // The items key varies by filter, so refresh every variant that is cached.
+        // Passing data alongside the filter would make SWR write it: the third argument
+        // takes it out of the revalidate-only path, and an undefined payload then blanks
+        // the cache before the refetch lands, unmounting whatever is on screen.
         mutate(
           (key) =>
             typeof key === 'string' &&
-            key.startsWith(`${api.listKey(listId)}/items`),
-          undefined,
-          { revalidate: true }
+            key.startsWith(`${api.listKey(listId)}/items`)
         ),
         mutate(api.mediaListsKey),
       ]),
@@ -122,6 +123,21 @@ export const useMediaListMutations = (mediaListId?: number) => {
     ): Promise<void> => {
       const id = requireList(listId);
       await api.setSeasonWatched(id, itemId, seasonNumber, watched);
+      await refreshList(id);
+    },
+
+    // Marking a whole show is one intent, so it refreshes once at the end rather than
+    // after each season. The calls stay sequential because they write the same rows.
+    setSeasonsWatched: async (
+      itemId: number,
+      seasonNumbers: number[],
+      watched: boolean,
+      listId?: number
+    ): Promise<void> => {
+      const id = requireList(listId);
+      for (const seasonNumber of seasonNumbers) {
+        await api.setSeasonWatched(id, itemId, seasonNumber, watched);
+      }
       await refreshList(id);
     },
 

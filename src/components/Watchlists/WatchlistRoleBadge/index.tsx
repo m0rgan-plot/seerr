@@ -1,34 +1,33 @@
+import Badge from '@app/components/Common/Badge';
 import type { MediaListRole } from '@app/domain/mediaLists/models/MediaList';
 import defineMessages from '@app/utils/defineMessages';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistRoleBadge', {
   owner: 'Owner',
-  canedit: 'Can edit',
-  canview: 'Can view',
+  canedit: 'Can Edit',
+  canview: 'Can View',
 });
 
-const styles: Record<MediaListRole, string> = {
-  owner: 'border-indigo-700 bg-indigo-800 bg-opacity-25 text-indigo-200',
-  write: 'border-green-600 bg-green-600 bg-opacity-20 text-green-200',
-  read: 'border-gray-600 bg-gray-600 bg-opacity-30 text-gray-300',
+// Owner and editor are the roles that change what the page offers, so they carry the
+// colours the rest of the app uses for that, and read-only stays neutral.
+const badges: Record<
+  MediaListRole,
+  { type: 'primary' | 'success' | 'light'; label: keyof typeof messages }
+> = {
+  owner: { type: 'primary', label: 'owner' },
+  write: { type: 'success', label: 'canedit' },
+  read: { type: 'light', label: 'canview' },
 };
 
 const WatchlistRoleBadge = ({ role }: { role: MediaListRole }) => {
   const intl = useIntl();
-
-  const label = {
-    owner: messages.owner,
-    write: messages.canedit,
-    read: messages.canview,
-  }[role];
+  const badge = badges[role];
 
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[role]}`}
-    >
-      {intl.formatMessage(label)}
-    </span>
+    <Badge badgeType={badge.type}>
+      {intl.formatMessage(messages[badge.label])}
+    </Badge>
   );
 };
 
