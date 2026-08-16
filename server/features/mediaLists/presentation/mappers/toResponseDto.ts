@@ -59,9 +59,11 @@ export const toMediaListSummaryDto = (
   itemCount: summary.itemCount,
   seenCount: summary.seenCount,
   previewItems: summary.previewItems.map((item) => ({
+    id: item.id,
     tmdbId: item.tmdbId,
     mediaType: item.mediaType,
     posterPath: item.posterPath,
+    watched: item.watched,
   })),
 });
 

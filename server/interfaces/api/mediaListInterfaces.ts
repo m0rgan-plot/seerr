@@ -17,9 +17,12 @@ export interface MediaListItemRef {
 }
 
 export interface MediaListPreviewItem extends MediaListItemRef {
+  id: number;
   // Relative TMDB path, or null when there is no art. Clients build the full URL the
   // same way they do everywhere else.
   posterPath: string | null;
+  // The requesting member's own state, so the poster strip can offer the right CTA.
+  watched: boolean;
 }
 
 export interface MediaListSeasonProgress {
