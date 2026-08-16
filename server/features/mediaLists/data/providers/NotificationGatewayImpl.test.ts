@@ -35,6 +35,7 @@ const item: MediaListItem = {
   tmdbId: 693134,
   mediaType: MediaType.MOVIE,
   position: 0,
+  status: null,
   addedBy: null,
   createdAt: new Date(),
 };

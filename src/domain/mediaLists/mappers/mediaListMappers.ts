@@ -52,6 +52,7 @@ export const toMediaListSummary = (
     mediaType: item.mediaType,
     posterPath: item.posterPath,
     watched: item.watched,
+    status: item.status,
   })),
 });
 
@@ -64,6 +65,7 @@ export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
   posterPath: dto.posterPath,
   year: dto.year,
   position: dto.position,
+  status: dto.status,
   addedBy: toOptionalUser(dto.addedBy),
   createdAt: new Date(dto.createdAt),
   watched: dto.watched,

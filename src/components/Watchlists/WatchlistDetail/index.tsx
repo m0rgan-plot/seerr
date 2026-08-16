@@ -30,21 +30,21 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   watchlists: 'Watchlists',
-  addmedia: 'Add media',
+  addmedia: 'Add Media',
   edit: 'Edit',
   share: 'Share',
   all: 'All',
   unseen: 'Unseen',
-  inprogress: 'In progress',
+  inprogress: 'In Progress',
   seen: 'Seen',
   seenprogress: "You've seen {watched} of {total}",
   empty: 'Nothing on this list yet.',
-  emptyaction: 'Add the first title',
+  emptyaction: 'Add the First Title',
   emptyreadonly: 'The owner has not added anything yet.',
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
@@ -83,6 +83,9 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
 
   const canEdit = canEditItems(list.role);
   const seenCount = items?.filter((item) => item.watched).length ?? 0;
+  // Read back from the current items so the tracker follows a refresh rather than
+  // holding the copy it was opened with.
+  const trackedItem = items?.find((item) => item.id === trackingItemId) ?? null;
 
   const labelFor = (value: MediaListItemFilter) =>
     intl.formatMessage(messages[value]);
@@ -138,19 +141,16 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-700 pt-4">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((value) => (
-            <button
+            <Button
               key={value}
-              type="button"
+              buttonType={filter === value ? 'primary' : 'default'}
+              buttonSize="sm"
               data-testid={`watchlist-filter-${value}`}
+              aria-pressed={filter === value}
               onClick={() => setFilter(value)}
-              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition duration-150 ${
-                filter === value
-                  ? 'border-indigo-500 bg-indigo-600 bg-opacity-80 text-white'
-                  : 'border-gray-600 text-gray-300 hover:border-gray-500'
-              }`}
             >
               {labelFor(value)}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -167,57 +167,61 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       {itemsLoading ? (
         <LoadingSpinner />
       ) : items && items.length > 0 ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-          {items.map((item) => (
-            <Fragment key={item.id}>
-              <WatchlistItemCard
-                item={item}
-                canEdit={canEdit}
-                onToggleSeen={async () => {
-                  try {
-                    await setMovieWatched(item.id, !item.watched);
-                  } catch {
-                    addToast(intl.formatMessage(messages.seenfailed), {
-                      appearance: 'error',
-                      autoDismiss: true,
-                    });
-                  }
-                }}
-                onOpenEpisodes={() =>
-                  setTrackingItemId((current) =>
-                    current === item.id ? null : item.id
-                  )
-                }
-                onRemove={async () => {
-                  try {
-                    await removeItem(item.id);
-                    addToast(intl.formatMessage(messages.removed), {
-                      appearance: 'success',
-                      autoDismiss: true,
-                    });
-                  } catch {
-                    addToast(intl.formatMessage(messages.removefailed), {
-                      appearance: 'error',
-                      autoDismiss: true,
-                    });
-                  }
-                }}
-                onRequestUpdate={revalidate}
-              />
-
-              {/* Spans the grid so the accordion opens under the row holding the card,
-                  rather than squeezing into one poster's column. */}
-              {trackingItemId === item.id && (
-                <WatchlistEpisodeTracker
-                  mediaListId={mediaListId}
+        <>
+          <ul className="cards-vertical">
+            {items.map((item) => (
+              <li key={item.id}>
+                <WatchlistItemCard
                   item={item}
-                  onClose={() => setTrackingItemId(null)}
-                  onChanged={revalidate}
+                  canEdit={canEdit}
+                  episodesOpen={trackingItemId === item.id}
+                  onToggleSeen={async () => {
+                    try {
+                      await setMovieWatched(item.id, !item.watched);
+                    } catch {
+                      addToast(intl.formatMessage(messages.seenfailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onOpenEpisodes={() =>
+                    setTrackingItemId((current) =>
+                      current === item.id ? null : item.id
+                    )
+                  }
+                  onRemove={async () => {
+                    try {
+                      await removeItem(item.id);
+                      addToast(intl.formatMessage(messages.removed), {
+                        appearance: 'success',
+                        autoDismiss: true,
+                      });
+                    } catch {
+                      addToast(intl.formatMessage(messages.removefailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onRequestUpdate={revalidate}
                 />
-              )}
-            </Fragment>
-          ))}
-        </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Below the grid rather than inside it: the columns are laid out by auto-fill
+              now, and a full-width row in the middle would leave a hole beside it. */}
+          {trackedItem && (
+            <div className="mt-4">
+              <WatchlistEpisodeTracker
+                mediaListId={mediaListId}
+                item={trackedItem}
+                onClose={() => setTrackingItemId(null)}
+              />
+            </div>
+          )}
+        </>
       ) : (
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-gray-400">

@@ -1,3 +1,4 @@
+import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import type {
   Collaborator,
@@ -9,7 +10,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.CollaboratorList', {
-  peoplewithaccess: 'People with access',
+  peoplewithaccess: 'People with Access',
   owner: 'Owner',
   canedit: 'Can edit',
   canview: 'Can view',
@@ -87,7 +88,7 @@ const CollaboratorList = ({
                   e.target.value as CollaboratorRole
                 )
               }
-              className="rounded-md border border-gray-500 bg-gray-700 py-1 pl-2 pr-8 text-sm text-gray-100 disabled:opacity-50"
+              className="short"
             >
               <option value="read">
                 {intl.formatMessage(messages.canview)}
@@ -97,17 +98,17 @@ const CollaboratorList = ({
               </option>
             </select>
 
-            <button
-              type="button"
+            <Button
+              buttonType="danger"
+              buttonSize="sm"
               disabled={busyUserId === collaborator.user.id}
               onClick={() => onRemove(collaborator.user.id)}
-              aria-label={intl.formatMessage(messages.remove, {
+              title={intl.formatMessage(messages.remove, {
                 name: collaborator.user.displayName,
               })}
-              className="rounded-md border border-gray-600 bg-gray-800 p-1.5 text-gray-400 transition duration-150 hover:text-white disabled:opacity-50"
             >
-              <XMarkIcon className="h-4 w-4" />
-            </button>
+              <XMarkIcon />
+            </Button>
           </div>
         ))}
 

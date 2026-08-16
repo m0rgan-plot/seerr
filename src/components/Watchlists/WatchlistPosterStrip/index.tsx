@@ -1,5 +1,7 @@
+import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
-import RequestButton from '@app/components/RequestButton';
+import StatusBadgeMini from '@app/components/Common/StatusBadgeMini';
+import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import type { MediaListRef } from '@app/domain/mediaLists/models/MediaList';
 import { useIsTouch } from '@app/hooks/useIsTouch';
@@ -11,15 +13,16 @@ import {
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { MediaStatus } from '@server/constants/media';
 import Link from 'next/link';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistPosterStrip', {
   add: 'Add',
   addtitles: 'Add titles to {name}',
-  empty: 'Nothing on this list yet',
-  markseen: 'Mark seen',
-  markunseen: 'Mark unseen',
+  empty: 'Nothing on this list yet.',
+  markseen: 'Mark Seen',
+  markunseen: 'Mark Unseen',
   remove: 'Remove',
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
@@ -101,39 +104,44 @@ const WatchlistPosterStrip = ({
             )}
           </Link>
 
+          {/* Status is worth seeing without hovering, the same way it is on a title
+              card, so it sits outside the overlay below. */}
+          {!!item.status && item.status !== MediaStatus.UNKNOWN && (
+            <div className="pointer-events-none absolute right-1.5 top-1.5 z-40 flex">
+              <StatusBadgeMini status={item.status} shrink />
+            </div>
+          )}
+
           {canAdd && !isTouch && (
             <div className="pointer-events-none absolute inset-0 flex flex-col justify-between bg-gray-900 bg-opacity-0 p-1.5 opacity-0 transition duration-150 group-hover:bg-opacity-70 group-hover:opacity-100">
-              <div className="flex justify-end gap-1">
-                <button
-                  type="button"
+              <div className="pointer-events-auto flex justify-end gap-1">
+                <Button
+                  buttonType={item.watched ? 'success' : 'default'}
+                  buttonSize="sm"
                   onClick={() => onToggleSeen(item)}
-                  aria-label={intl.formatMessage(
+                  title={intl.formatMessage(
                     item.watched ? messages.markunseen : messages.markseen
                   )}
-                  className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full bg-gray-800 bg-opacity-90 text-gray-100 ring-1 ring-gray-600 transition duration-150 hover:bg-gray-700"
                 >
-                  {item.watched ? (
-                    <EyeIcon className="h-3.5 w-3.5" />
-                  ) : (
-                    <EyeSlashIcon className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                  {item.watched ? <EyeIcon /> : <EyeSlashIcon />}
+                </Button>
 
-                <button
-                  type="button"
+                <Button
+                  buttonType="danger"
+                  buttonSize="sm"
                   onClick={() => onRemove(item)}
-                  aria-label={intl.formatMessage(messages.remove)}
-                  className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full bg-gray-800 bg-opacity-90 text-gray-100 ring-1 ring-gray-600 transition duration-150 hover:bg-red-900 hover:text-red-200"
+                  title={intl.formatMessage(messages.remove)}
                 >
-                  <XMarkIcon className="h-3.5 w-3.5" />
-                </button>
+                  <XMarkIcon />
+                </Button>
               </div>
 
-              <div className="pointer-events-auto flex justify-center [&>*]:w-full [&_button]:w-full">
-                <RequestButton
-                  mediaType={item.mediaType === 'tv' ? 'tv' : 'movie'}
+              <div className="pointer-events-auto flex justify-center">
+                <WatchlistRequestButton
                   tmdbId={item.tmdbId}
-                  onUpdate={() => undefined}
+                  mediaType={item.mediaType}
+                  status={item.status}
+                  className="w-full"
                 />
               </div>
             </div>
@@ -142,6 +150,8 @@ const WatchlistPosterStrip = ({
       ))}
 
       {canAdd && (
+        // A dashed drop-target tile rather than a Button: it is sized like the posters
+        // beside it, which no button size would give.
         <button
           type="button"
           onClick={onAdd}

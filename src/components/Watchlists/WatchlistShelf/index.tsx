@@ -1,3 +1,4 @@
+import Button from '@app/components/Common/Button';
 import WatchlistPosterStrip from '@app/components/Watchlists/WatchlistPosterStrip';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
 import type { MediaListSummary } from '@app/domain/mediaLists/models/MediaList';
@@ -6,6 +7,7 @@ import defineMessages from '@app/utils/defineMessages';
 import {
   ChevronRightIcon,
   EllipsisVerticalIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useIntl } from 'react-intl';
@@ -15,6 +17,7 @@ const messages = defineMessages('components.Watchlists.WatchlistShelf', {
   seencount: '{count} seen',
   byowner: 'by {name}',
   options: 'Options for {name}',
+  share: 'Share {name}',
 });
 
 interface WatchlistShelfProps {
@@ -22,12 +25,17 @@ interface WatchlistShelfProps {
   // Shown on lists someone else shared, where the owner is the useful detail.
   showOwner?: boolean;
   onOpenOptions?: (list: MediaListSummary) => void;
+  onAddMedia: (list: MediaListSummary) => void;
+  // Only the owner may share, so the entry point is absent rather than disabled.
+  onShare?: (list: MediaListSummary) => void;
 }
 
 const WatchlistShelf = ({
   list,
   showOwner = false,
   onOpenOptions,
+  onAddMedia,
+  onShare,
 }: WatchlistShelfProps) => {
   const intl = useIntl();
 
@@ -48,18 +56,31 @@ const WatchlistShelf = ({
             <ChevronRightIcon className="h-4 w-4 text-gray-500" />
           </Link>
 
-          {onOpenOptions && (
-            <button
-              type="button"
-              onClick={() => onOpenOptions(list)}
-              aria-label={intl.formatMessage(messages.options, {
-                name: list.name,
-              })}
-              className="rounded p-1 text-gray-400 transition duration-150 hover:text-white"
-            >
-              <EllipsisVerticalIcon className="h-5 w-5" />
-            </button>
-          )}
+          <div className="flex flex-none items-center gap-1">
+            {onShare && (
+              <Button
+                buttonType="ghost"
+                buttonSize="sm"
+                onClick={() => onShare(list)}
+                title={intl.formatMessage(messages.share, { name: list.name })}
+              >
+                <UserPlusIcon />
+              </Button>
+            )}
+
+            {onOpenOptions && (
+              <Button
+                buttonType="ghost"
+                buttonSize="sm"
+                onClick={() => onOpenOptions(list)}
+                title={intl.formatMessage(messages.options, {
+                  name: list.name,
+                })}
+              >
+                <EllipsisVerticalIcon />
+              </Button>
+            )}
+          </div>
         </div>
 
         {list.description && (
@@ -99,6 +120,7 @@ const WatchlistShelf = ({
           name={list.name}
           previewItems={list.previewItems}
           canAdd={canEditItems(list.role)}
+          onAdd={() => onAddMedia(list)}
         />
       </div>
     </div>

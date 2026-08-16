@@ -1,8 +1,10 @@
+import Button from '@app/components/Common/Button';
 import type {
   EpisodeRef,
   SeasonProgress,
 } from '@app/domain/mediaLists/models/MediaListItem';
 import { episodeKey } from '@app/domain/mediaLists/models/MediaListItem';
+import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import {
   CheckIcon,
@@ -15,15 +17,19 @@ import useSWR from 'swr';
 
 const messages = defineMessages('components.Watchlists.WatchlistSeasonRow', {
   season: 'Season {number}',
-  specials: 'Specials',
   episodecount: '{count, plural, one {# episode} other {# episodes}}',
-  allseen: 'All seen',
+  allseen: 'All Seen',
   someseen: '{count} seen',
-  markseason: 'Mark season seen',
-  unmarkseason: 'Mark season unseen',
+  markseason: 'Mark Season Seen',
+  unmarkseason: 'Mark Season Unseen',
   episode: 'S{season}E{episode}',
-  loading: 'Loading episodes',
+  loading: 'Loading episodes…',
+  expand: 'Show episodes of {season}',
 });
+
+// Season and episode numbers read as a pair, so they are padded to a fixed width the way
+// every other tool that names an episode does it.
+const pad = (value: number) => String(value).padStart(2, '0');
 
 interface WatchlistSeasonRowProps {
   tmdbId: number;
@@ -70,7 +76,17 @@ const WatchlistSeasonRow = ({
       <div className="flex flex-wrap items-center gap-3 px-3 py-2">
         <button
           type="button"
+          data-testid="watchlist-season-toggle"
           onClick={onToggleExpanded}
+          aria-expanded={expanded}
+          aria-label={intl.formatMessage(messages.expand, {
+            season:
+              season.seasonNumber === 0
+                ? intl.formatMessage(globalMessages.specials)
+                : intl.formatMessage(messages.season, {
+                    number: season.seasonNumber,
+                  }),
+          })}
           className="flex flex-1 items-center gap-3 text-left"
         >
           {expanded ? (
@@ -80,7 +96,7 @@ const WatchlistSeasonRow = ({
           )}
           <span className="w-24 flex-none text-sm font-semibold text-gray-200">
             {season.seasonNumber === 0
-              ? intl.formatMessage(messages.specials)
+              ? intl.formatMessage(globalMessages.specials)
               : intl.formatMessage(messages.season, {
                   number: season.seasonNumber,
                 })}
@@ -113,21 +129,19 @@ const WatchlistSeasonRow = ({
           </span>
         </button>
 
-        <button
-          type="button"
+        <Button
+          buttonType={season.isComplete ? 'success' : 'default'}
+          buttonSize="sm"
           disabled={busy}
           onClick={() => onToggleSeason(!season.isComplete)}
-          className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition duration-150 disabled:opacity-50 ${
-            season.isComplete
-              ? 'border-green-500 bg-green-500 bg-opacity-20 text-green-200'
-              : 'border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700'
-          }`}
         >
-          {season.isComplete && <CheckIcon className="h-3.5 w-3.5" />}
-          {intl.formatMessage(
-            season.isComplete ? messages.unmarkseason : messages.markseason
-          )}
-        </button>
+          {season.isComplete && <CheckIcon />}
+          <span>
+            {intl.formatMessage(
+              season.isComplete ? messages.unmarkseason : messages.markseason
+            )}
+          </span>
+        </Button>
       </div>
 
       {expanded && (
@@ -161,8 +175,8 @@ const WatchlistSeasonRow = ({
                 </span>
                 <span className="w-12 flex-none font-mono text-[11px] text-gray-500">
                   {intl.formatMessage(messages.episode, {
-                    season: season.seasonNumber,
-                    episode: episode.episodeNumber,
+                    season: pad(season.seasonNumber),
+                    episode: pad(episode.episodeNumber),
                   })}
                 </span>
                 <span className="flex-1 truncate text-sm text-gray-200">

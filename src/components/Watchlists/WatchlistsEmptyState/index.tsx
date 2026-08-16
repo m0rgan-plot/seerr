@@ -4,10 +4,10 @@ import { PlusIcon, RectangleStackIcon } from '@heroicons/react/24/outline';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistsEmptyState', {
-  title: 'No watchlists yet',
+  title: 'No Watchlists Yet',
   description:
     'Group the things you mean to watch, mark off what you have seen, and share a list with other users so you can build it together.',
-  create: 'Create a watchlist',
+  create: 'Create a Watchlist',
 });
 
 const WatchlistsEmptyState = ({ onCreate }: { onCreate: () => void }) => {
@@ -15,7 +15,7 @@ const WatchlistsEmptyState = ({ onCreate }: { onCreate: () => void }) => {
 
   return (
     <div className="mt-16 flex flex-col items-center gap-4 text-center">
-      <div className="h-18 w-18 flex items-center justify-center rounded-2xl bg-gray-800 p-4 text-gray-500 ring-1 ring-gray-700">
+      <div className="flex items-center justify-center rounded-2xl bg-gray-800 p-4 text-gray-500 ring-1 ring-gray-700">
         <RectangleStackIcon className="h-9 w-9" />
       </div>
       <h3 className="text-xl font-bold text-gray-200">

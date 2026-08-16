@@ -127,6 +127,8 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
       tmdbId: input.tmdbId,
       mediaType: input.mediaType,
       position: siblings.length,
+      // Nothing has requested a title the moment it is put on a list.
+      status: null,
       addedBy: this.users.get(input.addedById) ?? user(input.addedById),
       createdAt: new Date(),
     };

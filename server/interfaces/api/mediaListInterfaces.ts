@@ -1,4 +1,4 @@
-import type { MediaType } from '@server/constants/media';
+import type { MediaStatus, MediaType } from '@server/constants/media';
 
 // Wire shapes for /api/v1/mediaLists. Defined once and imported by both the response
 // mapper and the frontend, so the two cannot drift apart.
@@ -23,6 +23,8 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   posterPath: string | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
   watched: boolean;
+  // Where the title stands in the library. Null when nothing has ever tracked it.
+  status: MediaStatus | null;
 }
 
 export interface MediaListSeasonProgress {
@@ -66,6 +68,9 @@ export interface MediaListItem {
   posterPath: string | null;
   year: number | null;
   position: number;
+  // Availability in the library, which decides whether the card offers a request or
+  // reports one already in flight. Separate from watched, which is per member.
+  status: MediaStatus | null;
   addedBy: MediaListUser | null;
   createdAt: string;
   // The requesting member's own state. Null progress means the title is a movie.

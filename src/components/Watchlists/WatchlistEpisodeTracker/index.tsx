@@ -1,3 +1,4 @@
+import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import WatchlistSeasonRow from '@app/components/Watchlists/WatchlistSeasonRow';
@@ -14,8 +15,8 @@ const messages = defineMessages(
   'components.Watchlists.WatchlistEpisodeTracker',
   {
     seenprogress: "You've seen {watched} of {total}",
-    markallseen: 'Mark all seen',
-    markallunseen: 'Mark all unseen',
+    markallseen: 'Mark All Seen',
+    markallunseen: 'Mark All Unseen',
     close: 'Close episode tracking',
     seasoncount: '{count, plural, one {# season} other {# seasons}}',
     failed: 'Something went wrong updating your watched state.',
@@ -27,32 +28,28 @@ interface WatchlistEpisodeTrackerProps {
   mediaListId: number;
   item: MediaListItem;
   onClose: () => void;
-  onChanged: () => void;
 }
 
 const WatchlistEpisodeTracker = ({
   mediaListId,
   item,
   onClose,
-  onChanged,
 }: WatchlistEpisodeTrackerProps) => {
   const intl = useIntl();
   const { addToast } = useToasts();
-  const { setSeasonWatched, setEpisodeWatched } =
+  const { setSeasonWatched, setSeasonsWatched, setEpisodeWatched } =
     useMediaListMutations(mediaListId);
 
-  const { data, isLoading, revalidate } = useItemProgress(mediaListId, item.id);
+  const { data, isLoading } = useItemProgress(mediaListId, item.id);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Every write refreshes both the accordion and the grid card behind it, since the
-  // ring and the seen overlay are derived from the same records.
+  // The mutations already refresh every key under the list, which covers this accordion
+  // and the card behind it, so there is nothing left to revalidate here.
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     try {
       await action();
-      revalidate();
-      onChanged();
     } catch {
       addToast(intl.formatMessage(messages.failed), {
         appearance: 'error',
@@ -68,7 +65,7 @@ const WatchlistEpisodeTracker = ({
   const isComplete = data?.progress.isComplete ?? false;
 
   return (
-    <div className="col-span-full rounded-xl bg-gray-800 p-4 ring-1 ring-gray-600">
+    <div className="rounded-xl bg-gray-800 p-4 ring-1 ring-gray-600">
       <div className="flex flex-wrap items-start gap-4">
         <div className="relative aspect-[2/3] w-14 flex-none overflow-hidden rounded bg-gray-900">
           {item.posterPath && (
@@ -123,35 +120,35 @@ const WatchlistEpisodeTracker = ({
 
         <div className="flex items-center gap-2">
           {trackable.length > 0 && (
-            <button
-              type="button"
+            <Button
+              buttonType="default"
+              buttonSize="sm"
               disabled={busy}
               onClick={() =>
-                run(async () => {
-                  for (const season of trackable) {
-                    await setSeasonWatched(
-                      item.id,
-                      season.seasonNumber,
-                      !isComplete
-                    );
-                  }
-                })
+                run(() =>
+                  setSeasonsWatched(
+                    item.id,
+                    trackable.map((season) => season.seasonNumber),
+                    !isComplete
+                  )
+                )
               }
-              className="rounded-md border border-gray-600 bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-100 transition duration-150 hover:bg-gray-600 disabled:opacity-50"
             >
-              {intl.formatMessage(
-                isComplete ? messages.markallunseen : messages.markallseen
-              )}
-            </button>
+              <span>
+                {intl.formatMessage(
+                  isComplete ? messages.markallunseen : messages.markallseen
+                )}
+              </span>
+            </Button>
           )}
-          <button
-            type="button"
+          <Button
+            buttonType="ghost"
+            buttonSize="sm"
             onClick={onClose}
-            aria-label={intl.formatMessage(messages.close)}
-            className="rounded p-1 text-gray-400 transition duration-150 hover:text-white"
+            title={intl.formatMessage(messages.close)}
           >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
+            <XMarkIcon />
+          </Button>
         </div>
       </div>
 
