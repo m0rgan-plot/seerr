@@ -6,7 +6,7 @@ import { canEditItems } from '@app/domain/mediaLists/models/MediaList';
 import defineMessages from '@app/utils/defineMessages';
 import {
   ChevronRightIcon,
-  EllipsisVerticalIcon,
+  PencilIcon,
   UserPlusIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
@@ -16,7 +16,7 @@ const messages = defineMessages('components.Watchlists.WatchlistShelf', {
   titlecount: '{count, plural, one {# title} other {# titles}}',
   seencount: '{count} seen',
   byowner: 'by {name}',
-  options: 'Options for {name}',
+  edit: 'Edit {name}',
   share: 'Share {name}',
 });
 
@@ -73,11 +73,11 @@ const WatchlistShelf = ({
                 buttonType="ghost"
                 buttonSize="sm"
                 onClick={() => onOpenOptions(list)}
-                title={intl.formatMessage(messages.options, {
+                title={intl.formatMessage(messages.edit, {
                   name: list.name,
                 })}
               >
-                <EllipsisVerticalIcon />
+                <PencilIcon />
               </Button>
             )}
           </div>

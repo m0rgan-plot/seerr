@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { MediaType } from '@server/constants/media';
 import type { MovieResult, TvResult } from '@server/models/Search';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useIntl } from 'react-intl';
 import useSWR from 'swr';
@@ -33,6 +34,7 @@ type SearchFilter = 'all' | 'movie' | 'tv';
 interface AddMediaModalProps {
   show: boolean;
   mediaListId: number;
+  mediaListName: string;
   onComplete: () => void;
   onCancel: () => void;
 }
@@ -44,6 +46,7 @@ interface SearchResponse {
 const AddMediaModal = ({
   show,
   mediaListId,
+  mediaListName,
   onComplete,
   onCancel,
 }: AddMediaModalProps) => {
@@ -128,6 +131,7 @@ const AddMediaModal = ({
     >
       <Modal
         title={intl.formatMessage(messages.title)}
+        subTitle={mediaListName}
         okText={intl.formatMessage(globalMessages.close)}
         onOk={() => close(onComplete)}
         onCancel={() => close(onCancel)}
@@ -190,9 +194,13 @@ const AddMediaModal = ({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-gray-100">
+                  <Link
+                    href={isSeries ? `/tv/${result.id}` : `/movie/${result.id}`}
+                    target="_blank"
+                    className="block truncate text-sm font-semibold text-gray-100 hover:underline"
+                  >
                     {title}
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     <span>
                       {intl.formatMessage(

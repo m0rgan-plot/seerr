@@ -14,7 +14,7 @@ import { canDeleteList } from '@app/domain/mediaLists/models/MediaList';
 import useRetainedValue from '@app/hooks/useRetainedValue';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { BarsArrowDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 
@@ -23,7 +23,28 @@ const messages = defineMessages('components.Watchlists.WatchlistsList', {
   mylists: 'My Lists',
   sharedwithme: 'Shared with Me',
   newwatchlist: 'New Watchlist',
+  sortlastmodified: 'Last Modified',
+  sorttitle: 'Title',
+  sortcreated: 'Created',
 });
+
+type SortOption = 'updated' | 'title' | 'created';
+
+const sortLists = (
+  lists: MediaListSummary[],
+  sortBy: SortOption
+): MediaListSummary[] =>
+  [...lists].sort((a, b) => {
+    switch (sortBy) {
+      case 'title':
+        return a.name.localeCompare(b.name);
+      case 'created':
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      case 'updated':
+      default:
+        return b.updatedAt.getTime() - a.updatedAt.getTime();
+    }
+  });
 
 const WatchlistsList = () => {
   const intl = useIntl();
@@ -34,6 +55,7 @@ const WatchlistsList = () => {
   const [deleting, setDeleting] = useState<MediaListSummary | undefined>();
   const [adding, setAdding] = useState<MediaListSummary | undefined>();
   const [sharing, setSharing] = useState<MediaListSummary | undefined>();
+  const [sortBy, setSortBy] = useState<SortOption>('updated');
 
   // Each modal outlives the state that closed it by the length of its leave transition.
   const editingList = useRetainedValue(editing);
@@ -43,10 +65,13 @@ const WatchlistsList = () => {
 
   const { owned, shared } = useMemo(
     () => ({
-      owned: data?.filter((list) => list.role === 'owner') ?? [],
+      owned: sortLists(
+        data?.filter((list) => list.role === 'owner') ?? [],
+        sortBy
+      ),
       shared: data?.filter((list) => list.role !== 'owner') ?? [],
     }),
-    [data]
+    [data, sortBy]
   );
 
   if (error) {
@@ -85,9 +110,33 @@ const WatchlistsList = () => {
         <div className="flex flex-col gap-6">
           {owned.length > 0 && (
             <section>
-              <h2 className="slider-title">
-                {intl.formatMessage(messages.mylists)}
-              </h2>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <h2 className="slider-title">
+                  {intl.formatMessage(messages.mylists)}
+                </h2>
+                <div className="flex">
+                  <span className="inline-flex cursor-default items-center rounded-l-md border border-r-0 border-gray-500 bg-gray-800 px-3 text-gray-100 sm:text-sm">
+                    <BarsArrowDownIcon className="h-5 w-5" />
+                  </span>
+                  <select
+                    id="mediaListSortBy"
+                    name="mediaListSortBy"
+                    className="rounded-r-only short"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  >
+                    <option value="updated">
+                      {intl.formatMessage(messages.sortlastmodified)}
+                    </option>
+                    <option value="title">
+                      {intl.formatMessage(messages.sorttitle)}
+                    </option>
+                    <option value="created">
+                      {intl.formatMessage(messages.sortcreated)}
+                    </option>
+                  </select>
+                </div>
+              </div>
               <div className="mt-2">
                 {owned.map((list) => (
                   <WatchlistShelf
@@ -160,6 +209,7 @@ const WatchlistsList = () => {
         <AddMediaModal
           show={!!adding}
           mediaListId={addingList.id}
+          mediaListName={addingList.name}
           onComplete={() => setAdding(undefined)}
           onCancel={() => setAdding(undefined)}
         />
