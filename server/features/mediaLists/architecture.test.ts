@@ -114,9 +114,8 @@ describe('watchlists frontend architecture', () => {
   });
 });
 
-// The frontend keeps its own copy of the Notification enum. A value that exists on one
-// side and not the other means an agent silently never delivers, which is exactly how the
-// watchlist types would have shipped broken.
+// The frontend keeps its own copy of the Notification enum, so a value present on one
+// side and missing on the other cannot be enabled by anyone.
 describe('notification enum parity', () => {
   const valuesIn = (source: string) => {
     const body = source.slice(
@@ -145,5 +144,43 @@ describe('notification enum parity', () => {
     );
 
     assert.deepStrictEqual(client, server);
+  });
+
+  // Parity is not delivery. Both enums agreed while email and web push still could not
+  // render the watchlist types: email decides what to send from payload.request and
+  // payload.issue and returns nothing without them, and web push falls through to a
+  // notification titled "Unknown". Watchlist payloads carry neither, so every type this
+  // feature sends has to be named in those two agents.
+  it('covers every watchlist type in the agents that branch on the type', () => {
+    const root = join(__dirname, '../../..');
+    const gateway = readFileSync(
+      join(
+        root,
+        'server/features/mediaLists/data/providers/NotificationGatewayImpl.ts'
+      ),
+      'utf8'
+    );
+
+    const sent = [
+      ...new Set(
+        [...gateway.matchAll(/Notification\.(\w+)/g)].map((match) => match[1])
+      ),
+    ];
+
+    assert.ok(sent.length > 0, 'expected the gateway to send notifications');
+
+    const branching = [
+      'server/lib/notifications/agents/email.ts',
+      'server/lib/notifications/agents/webpush.ts',
+    ];
+
+    const missing = branching.flatMap((file) => {
+      const source = readFileSync(join(root, file), 'utf8');
+      return sent
+        .filter((type) => !source.includes(`Notification.${type}`))
+        .map((type) => `${file}: ${type}`);
+    });
+
+    assert.deepStrictEqual(missing, []);
   });
 });

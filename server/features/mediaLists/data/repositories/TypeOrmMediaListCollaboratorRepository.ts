@@ -6,7 +6,9 @@ import {
 } from '@server/features/mediaLists/data/mappers/collaboratorMapper';
 import MediaListCollaboratorRecord from '@server/features/mediaLists/data/orm/MediaListCollaboratorRecord';
 import MediaListRecord from '@server/features/mediaLists/data/orm/MediaListRecord';
+import { rethrowAsDomainError } from '@server/features/mediaLists/data/repositories/constraintErrors';
 import type { Collaborator } from '@server/features/mediaLists/domain/entities/Collaborator';
+import { DuplicateCollaboratorError } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 
@@ -46,16 +48,20 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
       userRepository.findOneOrFail({ where: { id: input.invitedById } }),
     ]);
 
-    const saved = await getRepository(MediaListCollaboratorRecord).save(
-      new MediaListCollaboratorRecord({
-        list,
-        user,
-        role: input.role,
-        invitedBy,
-      })
-    );
+    try {
+      const saved = await getRepository(MediaListCollaboratorRecord).save(
+        new MediaListCollaboratorRecord({
+          list,
+          user,
+          role: input.role,
+          invitedBy,
+        })
+      );
 
-    return toCollaborator(saved);
+      return toCollaborator(saved);
+    } catch (error) {
+      rethrowAsDomainError(error, new DuplicateCollaboratorError());
+    }
   }
 
   public async updateRole(
