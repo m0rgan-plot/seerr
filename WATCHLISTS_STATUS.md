@@ -20,6 +20,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ✅ |
+| 11 | Pending invites: `status` column + accept/reject endpoints, Invites section on the index page | ✅ |
 
 ## Decisions log
 
@@ -483,3 +484,80 @@ Still open:
 - Frame 1g's "Who can find it" section should be removed from the design (deferred to v2).
 - Frontend mapper unit tests have no runner today; plan keeps the frontend logic-free and relies on
   Cypress. Adding Vitest is an open option if mapper-level tests are wanted.
+
+## Milestone 11, pending invites (2026-08-16)
+
+New branch `feat/watchlists-pending-invites`, forked from the latest commit of
+`feat/watchlists-13-hover-and-mark-seen-polish` (`032accf3`) in a fresh worktree, leaving that
+branch's own uncommitted hover/mark-seen work untouched. Plan: `~/.claude/plans/cosmic-meandering-pelican.md`.
+
+Sharing a watchlist (`ShareWatchlistModal` → `POST /mediaLists/{id}/collaborators`) used to grant
+access the instant the owner invited someone. It now creates a **pending invite** instead: the
+invited user must accept before they get access or the list appears in their "Shared with Me"
+data, or they can reject, which is final — the owner has to invite them again rather than there
+being any un-reject flow.
+
+- **`findRole` and `findAccceptedRole` are two different questions on the same repository.**
+  `findRole` (any status) answers "is there a collaborator row for this user", used by `share`'s
+  duplicate check, `changeRole` and `remove` — collaborator *management* needs to see a pending
+  row too. `findAcceptedRole` (status-filtered) is the one `MediaListService.membershipFor` calls,
+  and it is the only thing that actually withholds access until acceptance. Conflating the two
+  would have either broken owner management of a pending invite or granted access before
+  acceptance.
+- **Accept/reject bypass `MediaListAccessPolicy` entirely.** Both are keyed off "does a pending row
+  exist for (listId, this exact caller)", where the caller is always `req.user!.id`, never a path
+  param, so there is no impersonation surface and no membership to resolve — a pending invitee has
+  no membership yet by definition.
+- **Reject deletes the row outright; there is no `rejected` status.** The request said no
+  un-reject, and a stored rejected state would need its own handling to let a later invite start
+  clean. Deleting it means a fresh `share()` afterward is just the normal duplicate-free path.
+- **Existing collaborator rows were backfilled to `accepted` in the migration itself**
+  (`UPDATE media_list_collaborator SET status = 'accepted'`), not left `pending` behind the
+  column's own default. Every one of them was granted under the old instant-access semantics, so
+  treating them as still-pending would have silently revoked access from every existing
+  collaborator the moment this shipped.
+- **The invite card shows an item count but never the items.** This was a specific ask: the whole
+  point of the invite step is to decide whether to join a list before its contents are visible, so
+  `MediaListViewService.invitesFor` (not `MediaListCollaboratorService`, which has no item
+  repository) resolves `itemCount` per invite the same way `summariesFor` resolves it per list,
+  without ever touching `MediaSummaryProvider`.
+- **The seeding test harness needed a real fix, not a workaround.** `seedSharedList()` in
+  `domain/test/harness.ts` calls the fake repository's `add()` directly to represent an
+  already-onboarded collaborator, which nearly every other domain test depends on for view/edit
+  access. Once `add()` started creating pending rows, the harness now also calls `accept()` on both
+  seeded collaborators, which is what it was always supposed to represent. The same fix landed in
+  the real-DB `repositories.test.ts`, `composition.test.ts` and the route-level
+  `mediaListRoutes.test.ts`'s `shareWith` callers, whichever needed the invited agent to actually
+  have access rather than just a pending row.
+- **CollaboratorList dims the avatar for a pending row** (`opacity-50`) rather than adding a text
+  badge, per a design steer to keep the existing avatar-circle layout rather than introduce new
+  chrome. Small enough that it was worth doing even though the original ask only covered the index
+  page — without it, the owner's "People with Access" list would misrepresent who actually has
+  access.
+- **The invite card reuses `RequestCard`'s chrome and button pattern** (`rounded-xl bg-gray-800
+  shadow ring-1 ring-gray-700`, `CheckIcon`/`XMarkIcon` from `@heroicons/react/24/solid`,
+  `buttonType="success"`/`"danger"`, the `Spinner`-while-busy swap, `hidden sm:block` /
+  `sm:hidden` mobile duplication) per an explicit steer toward the Discover "Recent Requests" card
+  look rather than a plain compact row. No poster or backdrop image: title, inviter and item count
+  only.
+
+Verification:
+
+- `pnpm test`: 390 passed, 0 failed (up from 368; 22 new across domain, data and route tests).
+- `pnpm typecheck` (both projects), `pnpm exec eslint`, prettier — all clean; no warnings in
+  changed files.
+- `pnpm i18n:extract`: 9 new keys captured (`WatchlistInviteCard` × 3, `WatchlistsList` × 5, plus
+  the `invites` section title), no stray literals.
+- sqlite: full migration chain applies clean; `migration:generate --dr` reports only the
+  pre-existing `user_push_subscription` drift (not this feature's); `migration:revert` drops the
+  `status` column cleanly via `DROP COLUMN` (supported by the bundled sqlite3 driver).
+- postgres 16 in Docker: migration applies, `migration:generate --dr` reports **"No changes in
+  database schema were found"**, and revert drops the column cleanly.
+- `pnpm build` (Next.js + server): clean, both `/watchlists` routes registered.
+- Verified against the real built app on a dedicated port (5099, to avoid the shared dev-server
+  port another session had open): a screenshot with a real pending invite confirmed the Invites
+  section renders above "My Lists"/the empty state exactly as designed — list name, "admin invited
+  you", a "1 title" badge, and green Accept / red Reject buttons, no poster art.
+- `cypress/e2e/watchlists.cy.ts` against that build, freshly seeded DB: **15 passing, 0 failing**,
+  including the two new invite scenarios (withholding access until accept, and reject-then-reinvite)
+  and the three existing sharing tests updated to accept the now-pending invite first.

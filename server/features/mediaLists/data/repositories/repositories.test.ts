@@ -7,6 +7,7 @@ import { TypeOrmMediaListItemRepository } from '@server/features/mediaLists/data
 import { TypeOrmMediaListRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListRepository';
 import { TypeOrmMediaListWatchRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListWatchRepository';
 import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 import { setupTestDb } from '@server/test/db';
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
@@ -79,6 +80,7 @@ describe('media list repositories', () => {
         role: CollaboratorRole.READ,
         invitedById: owner.id,
       });
+      await collaborators.accept(list.id, friend.id);
 
       const forFriend = await lists.findAccessibleTo(friend.id);
       const forOwner = await lists.findAccessibleTo(owner.id);
@@ -93,6 +95,22 @@ describe('media list repositories', () => {
         [list.id]
       );
       assert.ok(friendsOwn.id);
+    });
+
+    // A share is not access until it is accepted, so it must not show up as "shared
+    // with me" while still pending.
+    it('excludes a list from a pending, unaccepted invite', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const forFriend = await lists.findAccessibleTo(friend.id);
+
+      assert.deepStrictEqual(forFriend, []);
     });
 
     it('does not return a list twice when the user owns it', async () => {
@@ -535,6 +553,84 @@ describe('media list repositories', () => {
         null
       );
       assert.deepStrictEqual(await collaborators.findByList(list.id), []);
+    });
+
+    it('withholds the role from findAcceptedRole until accepted', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.WRITE,
+        invitedById: owner.id,
+      });
+
+      assert.strictEqual(
+        await collaborators.findAcceptedRole(list.id, friend.id),
+        null
+      );
+      // findRole (any status) still sees the pending row, since collaborator
+      // management needs to see it even before it grants access.
+      assert.strictEqual(
+        await collaborators.findRole(list.id, friend.id),
+        CollaboratorRole.WRITE
+      );
+
+      await collaborators.accept(list.id, friend.id);
+
+      assert.strictEqual(
+        await collaborators.findAcceptedRole(list.id, friend.id),
+        CollaboratorRole.WRITE
+      );
+    });
+
+    it('finds and clears a pending invite', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const invite = await collaborators.findPendingInvite(list.id, friend.id);
+      assert.strictEqual(invite?.status, InviteStatus.PENDING);
+
+      await collaborators.accept(list.id, friend.id);
+
+      assert.strictEqual(
+        await collaborators.findPendingInvite(list.id, friend.id),
+        null
+      );
+    });
+
+    it('collects pending invites for a user across lists', async () => {
+      const { list, owner, friend } = await seedList();
+      const secondList = await lists.create({
+        name: 'Second list',
+        description: null,
+        ownerId: owner.id,
+      });
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+      await collaborators.add({
+        listId: secondList.id,
+        userId: friend.id,
+        role: CollaboratorRole.WRITE,
+        invitedById: owner.id,
+      });
+      // Accepted, so it must not come back as a pending invite.
+      await collaborators.accept(secondList.id, friend.id);
+
+      const invites = await collaborators.findPendingInvitesFor(friend.id);
+
+      assert.strictEqual(invites.length, 1);
+      assert.strictEqual(invites[0].list.id, list.id);
+      assert.strictEqual(invites[0].role, CollaboratorRole.READ);
+      assert.strictEqual(invites[0].invitedBy?.id, owner.id);
     });
   });
 });

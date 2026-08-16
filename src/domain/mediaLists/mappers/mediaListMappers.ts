@@ -1,12 +1,14 @@
 import type {
   MediaListCollaboratorDto,
   MediaListDto,
+  MediaListInviteDto,
   MediaListItemDto,
   MediaListItemProgressDto,
   MediaListSummaryDto,
   MediaListUserDto,
 } from '@app/domain/mediaLists/api/dto';
 import type { Collaborator } from '@app/domain/mediaLists/models/Collaborator';
+import type { WatchlistInvite } from '@app/domain/mediaLists/models/Invite';
 import type {
   MediaList,
   MediaListSummary,
@@ -101,6 +103,18 @@ export const toCollaborator = (
 ): Collaborator => ({
   user: toUser(dto.user),
   role: dto.role,
+  status: dto.status,
   invitedBy: toOptionalUser(dto.invitedBy),
+  createdAt: new Date(dto.createdAt),
+});
+
+export const toWatchlistInvite = (
+  dto: MediaListInviteDto
+): WatchlistInvite => ({
+  listId: dto.listId,
+  listName: dto.listName,
+  role: dto.role,
+  invitedBy: toOptionalUser(dto.invitedBy),
+  itemCount: dto.itemCount,
   createdAt: new Date(dto.createdAt),
 });

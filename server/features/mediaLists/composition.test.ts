@@ -66,8 +66,17 @@ describe('media list composition', () => {
       actor: owner,
     });
 
-    // Sharing notifies the recipient.
+    // Sharing notifies the recipient, but grants nothing until they accept.
     assert.strictEqual(sent.mock.callCount(), 1);
+    await assert.rejects(
+      () => services.lists.view(list.id, friend.id),
+      MediaListAccessDeniedError
+    );
+
+    await services.collaborators.acceptInvite({
+      listId: list.id,
+      userId: friend.id,
+    });
 
     const shared = await services.lists.view(list.id, friend.id);
     assert.strictEqual(shared.id, list.id);

@@ -57,6 +57,15 @@ export class CannotCollaborateAsOwnerError extends Error {
   }
 }
 
+// Raised by accept/reject when there is no pending invite for the caller on that list,
+// whether because none was ever sent, it was already resolved, or the list is gone.
+export class InviteNotFoundError extends Error {
+  constructor(message = 'No pending invite found for this watchlist') {
+    super(message);
+    this.name = 'InviteNotFoundError';
+  }
+}
+
 // Raised when a movie action is used on a show or the reverse. Shows track progress
 // per episode, so they never carry a single watched flag.
 export class InvalidWatchTargetError extends Error {

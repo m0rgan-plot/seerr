@@ -12,6 +12,7 @@ import {
 import MediaListRecord from './MediaListRecord';
 
 export type MediaListCollaboratorRoleValue = 'read' | 'write';
+export type MediaListCollaboratorStatusValue = 'pending' | 'accepted';
 
 // The owner is never a row here. Ownership lives on MediaListRecord.owner, which is what
 // keeps "only the author can delete" expressible without a role that outranks write.
@@ -35,6 +36,9 @@ export class MediaListCollaboratorRecord {
 
   @Column({ type: 'varchar' })
   public role: MediaListCollaboratorRoleValue;
+
+  @Column({ type: 'varchar', default: 'pending' })
+  public status: MediaListCollaboratorStatusValue;
 
   @ManyToOne(() => User, {
     onDelete: 'SET NULL',

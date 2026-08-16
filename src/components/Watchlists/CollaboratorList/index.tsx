@@ -26,8 +26,20 @@ interface CollaboratorListProps {
   onRemove: (userId: number) => void;
 }
 
-const Avatar = ({ user }: { user: MediaListUser }) => (
-  <div className="relative h-9 w-9 flex-none overflow-hidden rounded-full bg-gray-600">
+// Dimmed while the invite is still pending, so an owner glancing at this list can tell
+// who has actually accepted from who has only been invited.
+const Avatar = ({
+  user,
+  pending = false,
+}: {
+  user: MediaListUser;
+  pending?: boolean;
+}) => (
+  <div
+    className={`relative h-9 w-9 flex-none overflow-hidden rounded-full bg-gray-600 ${
+      pending ? 'opacity-50' : ''
+    }`}
+  >
     {user.avatar && (
       <CachedImage
         type="avatar"
@@ -74,7 +86,10 @@ const CollaboratorList = ({
             data-testid="watchlist-collaborator"
             className="flex items-center gap-3 border-b border-gray-700 py-2.5"
           >
-            <Avatar user={collaborator.user} />
+            <Avatar
+              user={collaborator.user}
+              pending={collaborator.status === 'pending'}
+            />
             <div className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-100">
               {collaborator.user.displayName}
             </div>

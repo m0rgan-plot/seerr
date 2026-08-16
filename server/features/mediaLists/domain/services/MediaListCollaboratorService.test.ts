@@ -2,6 +2,7 @@ import {
   CannotCollaborateAsOwnerError,
   CollaboratorNotFoundError,
   DuplicateCollaboratorError,
+  InviteNotFoundError,
   MediaListAccessDeniedError,
   UserNotFoundError,
 } from '@server/features/mediaLists/domain/errors/MediaListErrors';
@@ -13,6 +14,7 @@ import {
   buildHarness,
 } from '@server/features/mediaLists/domain/test/harness';
 import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
@@ -33,6 +35,7 @@ describe('MediaListCollaboratorService', () => {
 
     assert.strictEqual(collaborator.user.id, WRITER.id);
     assert.strictEqual(collaborator.role, CollaboratorRole.WRITE);
+    assert.strictEqual(collaborator.status, InviteStatus.PENDING);
     assert.strictEqual(harness.notifications.shared.length, 1);
     assert.strictEqual(harness.notifications.shared[0].recipient.id, WRITER.id);
     assert.strictEqual(harness.notifications.shared[0].invitedBy.id, OWNER.id);
@@ -175,6 +178,132 @@ describe('MediaListCollaboratorService', () => {
             actorId: OWNER.id,
           }),
         CollaboratorNotFoundError
+      );
+    });
+  });
+
+  describe('acceptInvite', () => {
+    it('grants access and flips the row to accepted', async () => {
+      const harness = buildHarness();
+      const list = await harness.listService.create({
+        name: 'Film club',
+        ownerId: OWNER.id,
+      });
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: WRITER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+
+      const accepted = await harness.collaboratorService.acceptInvite({
+        listId: list.id,
+        userId: WRITER.id,
+      });
+
+      assert.strictEqual(accepted.status, InviteStatus.ACCEPTED);
+      assert.strictEqual(
+        await harness.collaborators.findAcceptedRole(list.id, WRITER.id),
+        CollaboratorRole.READ
+      );
+    });
+
+    it('raises when there is no pending invite for that user', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+
+      await assert.rejects(
+        () =>
+          harness.collaboratorService.acceptInvite({
+            listId: list.id,
+            userId: STRANGER.id,
+          }),
+        InviteNotFoundError
+      );
+    });
+
+    it('raises for an invite that was already accepted', async () => {
+      const harness = buildHarness();
+      // WRITER is seeded already-accepted, so this is a second attempt.
+      const list = await harness.seedSharedList();
+
+      await assert.rejects(
+        () =>
+          harness.collaboratorService.acceptInvite({
+            listId: list.id,
+            userId: WRITER.id,
+          }),
+        InviteNotFoundError
+      );
+    });
+  });
+
+  describe('rejectInvite', () => {
+    it('deletes the row and leaves no access behind', async () => {
+      const harness = buildHarness();
+      const list = await harness.listService.create({
+        name: 'Film club',
+        ownerId: OWNER.id,
+      });
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: WRITER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+
+      await harness.collaboratorService.rejectInvite({
+        listId: list.id,
+        userId: WRITER.id,
+      });
+
+      assert.strictEqual(
+        await harness.collaborators.findRole(list.id, WRITER.id),
+        null
+      );
+    });
+
+    // Final: no un-reject. The owner sends a fresh invite instead, which must not
+    // collide with the deleted row.
+    it('lets the owner invite the same person again after a reject', async () => {
+      const harness = buildHarness();
+      const list = await harness.listService.create({
+        name: 'Film club',
+        ownerId: OWNER.id,
+      });
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: WRITER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+      await harness.collaboratorService.rejectInvite({
+        listId: list.id,
+        userId: WRITER.id,
+      });
+
+      const reinvited = await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: WRITER.id,
+        role: CollaboratorRole.WRITE,
+        actor: OWNER,
+      });
+
+      assert.strictEqual(reinvited.status, InviteStatus.PENDING);
+      assert.strictEqual(reinvited.role, CollaboratorRole.WRITE);
+    });
+
+    it('raises when there is no pending invite for that user', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+
+      await assert.rejects(
+        () =>
+          harness.collaboratorService.rejectInvite({
+            listId: list.id,
+            userId: STRANGER.id,
+          }),
+        InviteNotFoundError
       );
     });
   });

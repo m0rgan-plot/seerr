@@ -1,6 +1,7 @@
 import type { MediaType } from '@server/constants/media';
 import type { Collaborator } from '@server/features/mediaLists/domain/entities/Collaborator';
 import type { MediaList } from '@server/features/mediaLists/domain/entities/MediaList';
+import type { MediaListInvite } from '@server/features/mediaLists/domain/entities/MediaListInvite';
 import type { MediaListItem } from '@server/features/mediaLists/domain/entities/MediaListItem';
 import type { NotificationGateway } from '@server/features/mediaLists/domain/ports/NotificationGateway';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
@@ -16,6 +17,7 @@ import type {
 } from '@server/features/mediaLists/domain/repositories/MediaListRepository';
 import type { MediaListWatchRepository } from '@server/features/mediaLists/domain/repositories/MediaListWatchRepository';
 import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
 import type {
   EpisodeRef,
@@ -46,7 +48,9 @@ export class FakeMediaListRepository implements MediaListRepository {
 
   async findAccessibleTo(userId: number): Promise<MediaList[]> {
     const shared = (this.collaborators?.rows ?? [])
-      .filter((row) => row.user.id === userId)
+      .filter(
+        (row) => row.user.id === userId && row.status === InviteStatus.ACCEPTED
+      )
       .map((row) => row.listId);
 
     return this.lists.filter(
@@ -155,6 +159,9 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
 
 export class FakeMediaListCollaboratorRepository implements MediaListCollaboratorRepository {
   public rows: (Collaborator & { listId: number })[] = [];
+  // Set by the harness to the same array FakeMediaListRepository holds, once both exist.
+  // findPendingInvitesFor is the only method here that needs to look a list up.
+  public lists: MediaList[] = [];
 
   constructor(private readonly users: Map<number, UserRef>) {}
 
@@ -172,6 +179,47 @@ export class FakeMediaListCollaboratorRepository implements MediaListCollaborato
     );
   }
 
+  async findAcceptedRole(
+    listId: number,
+    userId: number
+  ): Promise<CollaboratorRole | null> {
+    return (
+      this.rows.find(
+        (row) =>
+          row.listId === listId &&
+          row.user.id === userId &&
+          row.status === InviteStatus.ACCEPTED
+      )?.role ?? null
+    );
+  }
+
+  async findPendingInvite(
+    listId: number,
+    userId: number
+  ): Promise<Collaborator | null> {
+    return (
+      this.rows.find(
+        (row) =>
+          row.listId === listId &&
+          row.user.id === userId &&
+          row.status === InviteStatus.PENDING
+      ) ?? null
+    );
+  }
+
+  async findPendingInvitesFor(userId: number): Promise<MediaListInvite[]> {
+    return this.rows
+      .filter(
+        (row) => row.user.id === userId && row.status === InviteStatus.PENDING
+      )
+      .map((row) => ({
+        list: this.lists.find((list) => list.id === row.listId) as MediaList,
+        role: row.role,
+        invitedBy: row.invitedBy,
+        createdAt: row.createdAt,
+      }));
+  }
+
   async add(input: {
     listId: number;
     userId: number;
@@ -182,10 +230,22 @@ export class FakeMediaListCollaboratorRepository implements MediaListCollaborato
       listId: input.listId,
       user: this.users.get(input.userId) ?? user(input.userId),
       role: input.role,
+      status: InviteStatus.PENDING,
       invitedBy: this.users.get(input.invitedById) ?? user(input.invitedById),
       createdAt: new Date(),
     };
     this.rows.push(row);
+    return row;
+  }
+
+  async accept(listId: number, userId: number): Promise<Collaborator> {
+    const row = this.rows.find(
+      (candidate) => candidate.listId === listId && candidate.user.id === userId
+    );
+    if (!row) {
+      throw new Error('no collaborator');
+    }
+    row.status = InviteStatus.ACCEPTED;
     return row;
   }
 
