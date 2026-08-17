@@ -80,6 +80,8 @@
   "components.Discover.DiscoverTvKeyword.keywordSeries": "{keywordTitle} Series",
   "components.Discover.DiscoverTvLanguage.languageSeries": "{language} Series",
   "components.Discover.DiscoverWatchlist.discoverwatchlist": "Your Watchlist",
+  "components.Discover.DiscoverWatchlist.sortAdded": "Date Added",
+  "components.Discover.DiscoverWatchlist.sortTitle": "Title",
   "components.Discover.DiscoverWatchlist.watchlist": "Plex Watchlist",
   "components.Discover.FilterSlideover.activefilters": "{count, plural, one {# Active Filter} other {# Active Filters}}",
   "components.Discover.FilterSlideover.certification": "Content Rating",
