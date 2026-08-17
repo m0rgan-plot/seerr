@@ -2,6 +2,7 @@ import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import { User } from '@server/entity/User';
+import MediaListRecord from '@server/features/mediaLists/data/orm/MediaListRecord';
 import { TypeOrmMediaListCollaboratorRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListCollaboratorRepository';
 import { TypeOrmMediaListItemRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListItemRepository';
 import { TypeOrmMediaListRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListRepository';
@@ -144,6 +145,21 @@ describe('media list repositories', () => {
       await lists.delete(list.id);
 
       assert.strictEqual(await lists.findById(list.id), null);
+    });
+
+    // The requirement is a soft delete, not a hard one: the row must survive with
+    // deletedAt stamped so it can still be audited or restored later.
+    it('soft deletes: the row survives with deletedAt stamped', async () => {
+      const { list } = await seedList();
+
+      await lists.delete(list.id);
+
+      const record = await getRepository(MediaListRecord).findOne({
+        where: { id: list.id },
+        withDeleted: true,
+      });
+      assert.ok(record);
+      assert.ok(record?.deletedAt);
     });
   });
 
