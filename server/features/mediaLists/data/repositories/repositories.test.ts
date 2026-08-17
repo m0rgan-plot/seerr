@@ -550,12 +550,29 @@ describe('media list repositories', () => {
         role: CollaboratorRole.READ,
         invitedById: owner.id,
       });
+      // findByLists feeds the "shared with" avatars, which only make sense once
+      // someone has actually joined the list.
+      await collaborators.accept(first.id, friend.id);
 
       const byList = await collaborators.findByLists([first.id, second.id]);
 
       assert.strictEqual(byList.get(first.id)?.length, 1);
       assert.strictEqual(byList.get(first.id)?.[0].user.id, friend.id);
       assert.strictEqual(byList.has(second.id), false);
+    });
+
+    it('excludes a pending invite from the batched shared-with lookup', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const byList = await collaborators.findByLists([list.id]);
+
+      assert.strictEqual(byList.has(list.id), false);
     });
 
     it('returns an empty map for an empty batch', async () => {

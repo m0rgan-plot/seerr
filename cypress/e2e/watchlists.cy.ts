@@ -307,9 +307,11 @@ describe('Watchlists', () => {
       acceptInviteViaApi(this.listId);
       cy.visit('/watchlists');
 
-      // A shared list is filed separately from the ones you own.
-      cy.contains('Shared with Me');
-      cy.get('[data-testid=watchlist-shelf]').should('contain', 'Film club');
+      // Shared and owned lists live in one section; the role badge is what tells
+      // them apart, and this account is a mere viewer of this one.
+      cy.get('[data-testid=watchlist-shelf]')
+        .should('contain', 'Film club')
+        .and('contain', 'Can View');
 
       cy.visit(`/watchlists/${this.listId}`);
       cy.contains('button', 'Add Media').should('not.exist');
@@ -346,7 +348,6 @@ describe('Watchlists', () => {
 
       // Not accepted yet, so it must not read as a list the friend already has. The
       // friend owns nothing either, so the empty state renders and no shelf exists yet.
-      cy.contains('Shared with Me').should('not.exist');
       cy.get('[data-testid=watchlist-shelf]').should('not.exist');
 
       cy.get('[data-testid=watchlist-invite-card]')
@@ -358,7 +359,6 @@ describe('Watchlists', () => {
         .click();
 
       cy.get('[data-testid=watchlist-invite-card]').should('not.exist');
-      cy.contains('Shared with Me');
       cy.get('[data-testid=watchlist-shelf]').should('contain', 'Film club');
     });
 
