@@ -623,3 +623,66 @@ Verification:
 - `cypress/e2e/watchlists.cy.ts` against that build, freshly seeded DB: **15 passing, 0 failing**,
   including the two new invite scenarios (withholding access until accept, and reject-then-reinvite)
   and the three existing sharing tests updated to accept the now-pending invite first.
+
+## PR #18: sort + shared-with avatars + invites merged, then live-testing fixes (2026-08-17)
+
+`worktree-snug-singing-sundae` (#15), `feat/watchlists-17-shared-with-badges` (#16) and
+`feat/watchlists-pending-invites` (#17) were all built independently off #14. Merged all
+three onto a new `integration/watchlists-15-16-17` branch, resolving the one real conflict
+(#16 and #17 both touch `MediaListCollaboratorRepository`): the batched shared-with-avatars
+lookup now filters to `ACCEPTED` collaborators only, so a pending invitee doesn't appear as
+"shared with" before they've joined — #16 had no way to know to guard against this since it
+predates the invite states existing.
+
+**#15 turned out not to be what it looked like.** Its title (`add sort order (date added /
+title)`) matches almost exactly what was expected for MediaList item-level sort, but the
+diff lands entirely on the pre-existing, unrelated per-user Plex `Watchlist` entity
+(`server/entity/Watchlist.ts`, the `/api/v1/watchlist` Discover slider) — same word,
+different feature. The actual gap (sorting items within one MediaList) was still open and
+is added fresh in this PR.
+
+Then, testing the merged build live surfaced a real string of issues, fixed in order:
+
+- **A genuine bug, not a UI nit**: the item card's one-tap seen toggle called
+  `setMovieWatched` unconditionally. For a series the server correctly rejects that
+  (`InvalidWatchTargetError` — series track per episode, not as a single title), which
+  surfaced as a silent-looking failure toast on every attempt to tick a show as watched
+  from the card. Fixed by branching on media type: a series now calls `setSeasonsWatched`
+  with every trackable season, built from `item.progress.seasons` already on hand — no
+  extra fetch. The poster strip has no season data to do the same, so it hides the toggle
+  for a series there instead of offering an action that would still fail.
+- **"Shared with Me" removed as a section.** Owned and shared lists render together in "My
+  Lists" now; the role badge (Owner/Can Edit/Can View) already said which was which, so a
+  second heading and a "by {owner}" line were saying it twice.
+- **Shelf preview order was wrong.** It inherited `findByList`'s manual-`position` order
+  (ascending, for reorder — never built) instead of showing what's newest. Preview now
+  sorts by `position` descending, chosen over `createdAt` because two adds in the same
+  request can tie on a timestamp column but never on the position counter.
+- **Shared-with avatars link to the person's profile** (`/users/:id`) — any authenticated
+  caller can view it, just with fewer fields than the owner/admin would see.
+- **Remove-title confirmation now names the title** on the poster strip too. Required
+  threading `title`, `createdAt` and `addedBy` onto `MediaListPreviewItem` end to end
+  (domain service → presentation mapper → OpenAPI schema → frontend model → frontend
+  mapper) — the summary provider was already resolving title alongside the poster path
+  and simply hadn't kept it.
+- **Hover/tap info row** on the poster strip shows the added date, plus the adder's avatar
+  when it wasn't the viewer.
+- **Title-sort quirk on the index**: a decorative leading emoji (`🎵 Musician Biopics`)
+  pinned that list first under "Title" sort regardless of the word after it, because
+  default locale collation ranks symbols below letters. Compares on the first letter or
+  digit instead. Checked the other two sort modes carefully before assuming a wider bug:
+  "Last Modified" and "Created" were already correct — a shared list that looked "always
+  on top" turned out to genuinely be the most recently created/modified one in the test
+  data, confirmed against the raw API response before writing any fix.
+- Watched titles render at reduced opacity (both the detail grid and the poster strip);
+  the strip now carries the same persistent seen checkmark the detail card already has.
+- Dropped the "In Progress" filter chip from the list detail page.
+
+Verified end to end: `pnpm typecheck` (both projects) and `pnpm exec eslint` clean,
+`pnpm test` 395 passed / 0 failed, `pnpm build` clean, and every fix checked live in the
+browser against a rebuilt server — including logging out and back in as a second real
+user (`friend@seerr.dev`) specifically to confirm the shared-with avatar excludes the
+viewer's own face and that the profile link works for a non-owner.
+
+PR: [#18](https://github.com/m0rgan-plot/seerr/pull/18), based on #14. #15, #16 and #17
+closed with a pointer here once their content was confirmed merged in.
