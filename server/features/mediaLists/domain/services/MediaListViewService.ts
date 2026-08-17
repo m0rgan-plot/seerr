@@ -113,13 +113,22 @@ export class MediaListViewService {
           allSeasonCounts: false,
         });
 
+        // findByList orders by position ascending; the preview reads as "what's new on
+        // this list", so it takes the highest positions instead. Manual drag-reorder
+        // was never built (see WATCHLISTS_STATUS.md), so position is still exactly an
+        // insertion counter today -- a more reliable "most recent" signal than a
+        // timestamp column, which two adds in the same request could tie on.
+        const byRecency = [...views].sort(
+          (a, b) => b.item.position - a.item.position
+        );
+
         return {
           list,
           membership,
           itemCount: items.length,
           seenCount: views.filter((view) => view.watched).length,
           previewItems: await this.buildPreview(
-            views.slice(0, PREVIEW_ITEM_COUNT)
+            byRecency.slice(0, PREVIEW_ITEM_COUNT)
           ),
           sharedWith: (collaboratorsByList.get(list.id) ?? []).map(
             (collaborator) => collaborator.user

@@ -66,7 +66,8 @@ describe('MediaListViewService', () => {
       assert.strictEqual(forOwner.seenCount, 0);
     });
 
-    it('resolves a poster for each preview title', async () => {
+    // The preview reads as "what's new", so the most recently added title leads.
+    it('resolves a poster for each preview title, newest first', async () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [11, 12]);
@@ -76,18 +77,18 @@ describe('MediaListViewService', () => {
 
       assert.deepStrictEqual(summary.previewItems, [
         {
-          id: items[0].id,
-          tmdbId: 11,
-          mediaType: MediaType.MOVIE,
-          posterPath: '/poster-11.jpg',
-          watched: false,
-          status: null,
-        },
-        {
           id: items[1].id,
           tmdbId: 12,
           mediaType: MediaType.MOVIE,
           posterPath: '/poster-12.jpg',
+          watched: false,
+          status: null,
+        },
+        {
+          id: items[0].id,
+          tmdbId: 11,
+          mediaType: MediaType.MOVIE,
+          posterPath: '/poster-11.jpg',
           watched: false,
           status: null,
         },
@@ -99,6 +100,7 @@ describe('MediaListViewService', () => {
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [21, 22]);
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      // The first added, which the preview now places last.
       await harness.watchService.setMovieWatched(
         list.id,
         items[0].id,
@@ -110,7 +112,7 @@ describe('MediaListViewService', () => {
 
       assert.deepStrictEqual(
         summary.previewItems.map((item) => item.watched),
-        [true, false]
+        [false, true]
       );
     });
 
@@ -126,7 +128,8 @@ describe('MediaListViewService', () => {
     });
 
     // The strip only holds so many, and every extra preview is another TMDB lookup.
-    it('caps the preview at seven titles', async () => {
+    // It keeps the most recently added of the nine, not the first seven in.
+    it('caps the preview at the seven most recently added titles', async () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -137,7 +140,7 @@ describe('MediaListViewService', () => {
       assert.strictEqual(summary.previewItems.length, 7);
       assert.deepStrictEqual(
         summary.previewItems.map((item) => item.tmdbId),
-        [1, 2, 3, 4, 5, 6, 7]
+        [9, 8, 7, 6, 5, 4, 3]
       );
     });
 
