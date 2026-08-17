@@ -18,6 +18,8 @@ export interface MediaListItemRef {
 
 export interface MediaListPreviewItem extends MediaListItemRef {
   id: number;
+  // Resolved from TMDB alongside the poster. Null when TMDB no longer knows the title.
+  title: string | null;
   // Relative TMDB path, or null when there is no art. Clients build the full URL the
   // same way they do everywhere else.
   posterPath: string | null;
@@ -25,6 +27,9 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   watched: boolean;
   // Where the title stands in the library. Null when nothing has ever tracked it.
   status: MediaStatus | null;
+  createdAt: string;
+  // Null once the person who added it is deleted. The item stays.
+  addedBy: MediaListUser | null;
 }
 
 export interface MediaListSeasonProgress {
@@ -56,6 +61,10 @@ export interface MediaListSummary extends MediaList {
   // How many titles the requesting member has finished, not a shared total.
   seenCount: number;
   previewItems: MediaListPreviewItem[];
+  // Who the list is shared with, for the shelf row's avatar badges. Capped server-side;
+  // sharedWithCount is the true total, for an overflow "+N" affordance.
+  sharedWith: MediaListUser[];
+  sharedWithCount: number;
 }
 
 export interface MediaListItem {
@@ -92,13 +101,28 @@ export interface MediaListItemProgress {
   episodes: MediaListEpisodeRef[];
 }
 
+export type MediaListInviteStatus = 'pending' | 'accepted';
+
 export interface MediaListCollaborator {
   user: MediaListUser;
   role: Exclude<MediaListRole, 'owner'>;
+  status: MediaListInviteStatus;
   invitedBy: MediaListUser | null;
+  createdAt: string;
+}
+
+// A pending invite as seen by the invited user. Carries an item count but never the
+// items themselves, so accepting or rejecting is never a decision made on list contents.
+export interface MediaListInvite {
+  listId: number;
+  listName: string;
+  role: Exclude<MediaListRole, 'owner'>;
+  invitedBy: MediaListUser | null;
+  itemCount: number;
   createdAt: string;
 }
 
 export type MediaListsResponse = MediaListSummary[];
 export type MediaListItemsResponse = MediaListItem[];
 export type MediaListCollaboratorsResponse = MediaListCollaborator[];
+export type MediaListInvitesResponse = MediaListInvite[];

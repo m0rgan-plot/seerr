@@ -15,12 +15,17 @@ export interface MediaListRef {
   id: number;
   tmdbId: number;
   mediaType: MediaType;
+  // Resolved from TMDB alongside the poster. Null when TMDB no longer knows the title.
+  title: string | null;
   // Relative TMDB path, or null when there is no art for the title.
   posterPath: string | null;
   // The signed-in member's own state, so hover CTAs know which action to offer.
   watched: boolean;
   // Availability in the library, which decides what the request CTA says.
   status: MediaStatus | null;
+  createdAt: Date;
+  // Null once the person who added it is deleted. The item stays.
+  addedBy: MediaListUser | null;
 }
 
 export interface MediaList {
@@ -38,6 +43,10 @@ export interface MediaListSummary extends MediaList {
   // Titles the signed-in member has finished, not a shared total.
   seenCount: number;
   previewItems: MediaListRef[];
+  // Who the list is shared with, for the shelf row's avatar badges. May be fewer than
+  // sharedWithCount: the server caps how many it sends per list.
+  sharedWith: MediaListUser[];
+  sharedWithCount: number;
 }
 
 // UX gating only. Every mutation is checked again on the server, so these are about not

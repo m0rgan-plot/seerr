@@ -5,6 +5,7 @@ import {
   DuplicateMediaListItemError,
   InvalidReorderError,
   InvalidWatchTargetError,
+  InviteNotFoundError,
   ItemNotFoundInListError,
   MediaListAccessDeniedError,
   MediaListNotFoundError,
@@ -37,6 +38,7 @@ export const toHttpError = (error: unknown): HttpError => {
     case ItemNotFoundInListError:
     case CollaboratorNotFoundError:
     case UserNotFoundError:
+    case InviteNotFoundError:
       return { status: 404, message };
     case MediaListAccessDeniedError:
       return { status: 403, message };

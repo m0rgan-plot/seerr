@@ -1,12 +1,14 @@
 import type {
   MediaListCollaboratorDto,
   MediaListDto,
+  MediaListInviteDto,
   MediaListItemDto,
   MediaListItemProgressDto,
   MediaListSummaryDto,
   MediaListUserDto,
 } from '@app/domain/mediaLists/api/dto';
 import type { Collaborator } from '@app/domain/mediaLists/models/Collaborator';
+import type { WatchlistInvite } from '@app/domain/mediaLists/models/Invite';
 import type {
   MediaList,
   MediaListSummary,
@@ -50,10 +52,15 @@ export const toMediaListSummary = (
     id: item.id,
     tmdbId: item.tmdbId,
     mediaType: item.mediaType,
+    title: item.title,
     posterPath: item.posterPath,
     watched: item.watched,
     status: item.status,
+    createdAt: new Date(item.createdAt),
+    addedBy: toOptionalUser(item.addedBy),
   })),
+  sharedWith: dto.sharedWith.map(toUser),
+  sharedWithCount: dto.sharedWithCount,
 });
 
 export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
@@ -101,6 +108,18 @@ export const toCollaborator = (
 ): Collaborator => ({
   user: toUser(dto.user),
   role: dto.role,
+  status: dto.status,
   invitedBy: toOptionalUser(dto.invitedBy),
+  createdAt: new Date(dto.createdAt),
+});
+
+export const toWatchlistInvite = (
+  dto: MediaListInviteDto
+): WatchlistInvite => ({
+  listId: dto.listId,
+  listName: dto.listName,
+  role: dto.role,
+  invitedBy: toOptionalUser(dto.invitedBy),
+  itemCount: dto.itemCount,
   createdAt: new Date(dto.createdAt),
 });

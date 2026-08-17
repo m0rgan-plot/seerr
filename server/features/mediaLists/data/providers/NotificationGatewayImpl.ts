@@ -26,16 +26,16 @@ export class NotificationGatewayImpl implements NotificationGateway {
     const canEdit = input.role === CollaboratorRole.WRITE;
 
     this.send(Notification.MEDIA_LIST_SHARED, {
-      event: 'Watchlist Shared',
+      event: 'Watchlist Invite',
       subject: input.list.name,
-      message: `${input.invitedBy.displayName} shared a watchlist with you. You can ${
+      message: `${input.invitedBy.displayName} invited you to a watchlist. Accept the invite to ${
         canEdit ? 'add and remove titles' : 'view it'
       }.`,
       notifyUser: recipient,
       extra: [
         { name: 'Watchlist', value: input.list.name },
-        { name: 'Shared by', value: input.invitedBy.displayName },
-        { name: 'Access', value: canEdit ? 'Can edit' : 'Can view' },
+        { name: 'Invited by', value: input.invitedBy.displayName },
+        { name: 'Access offered', value: canEdit ? 'Can edit' : 'Can view' },
       ],
     });
   }

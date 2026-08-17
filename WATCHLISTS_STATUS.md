@@ -20,6 +20,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ✅ |
+| 11 | Pending invites: `status` column + accept/reject endpoints, Invites section on the index page | ✅ |
 
 ## Decisions log
 
@@ -483,3 +484,205 @@ Still open:
 - Frame 1g's "Who can find it" section should be removed from the design (deferred to v2).
 - Frontend mapper unit tests have no runner today; plan keeps the frontend logic-free and relies on
   Cypress. Adding Vitest is an open option if mapper-level tests are wanted.
+
+## PR #16, `feat/watchlists-17-shared-with-badges` (2026-08-16)
+
+Built the "shared with" avatars on `WatchlistShelf` flagged as deferred in the PR #14
+log above, off `feat/watchlists-13-hover-and-mark-seen-polish`. The brief was explicit
+that this must not deepen F4's documented index N+1 (`summariesFor`: 1 + 4N queries for
+N lists today).
+
+- **Query strategy: one batched `IN (...)` lookup, not a per-list query.** Added
+  `MediaListCollaboratorRepository.findByLists(listIds): Promise<Map<number,
+  Collaborator[]>>`, implemented in `TypeOrmMediaListCollaboratorRepository` as a single
+  `find({ where: { list: { id: In(listIds) } }, relations: { user, invitedBy, list } })`
+  and grouped into a map by `record.list.id`. `MediaListViewService.summariesFor` calls
+  it once before the per-list `Promise.all`, then reads from the map inside the loop.
+  Net effect on the index: **+1 query total, not +N** — `summariesFor` is now 2 + 4N
+  rather than 1 + 4N. Mirrors the existing `findMovieWatchesForItems` /
+  `findEpisodeWatchesForItems` batched-by-itemIds pattern in
+  `TypeOrmMediaListWatchRepository`, which was the precedent to follow. A domain test
+  (`MediaListViewService.test.ts`) asserts `findByLists` is called exactly once across
+  two lists via a call-recording fake, and an integration test
+  (`repositories.test.ts`) exercises the real batched query against sqlite.
+- **Wire shape: minimal `MediaListUser` (id, displayName, avatar), capped and counted.**
+  `UserRef` already carried exactly the avatar-rendering fields with nothing sensitive
+  (no email, matching the milestone 9 decision), so no new type was needed — reused the
+  same `toUser` mapper collaborators already use. Server caps `sharedWith` at 5 entries
+  per list (`SHARED_WITH_LIMIT` in `toResponseDto.ts`) since this goes out on every list
+  on the index; `sharedWithCount` carries the true total so the client's "+N" overflow
+  chip is accurate even when the server held some back. The domain layer
+  (`MediaListSummary.sharedWith`) itself carries the full, uncapped list — capping is a
+  presentation-layer decision, not a domain one.
+- **Threaded end to end**: `MediaListCollaboratorRepository` → `MediaListViewService`
+  (`MediaListSummary.sharedWith: UserRef[]`) → `toResponseDto.ts`
+  (`sharedWith`/`sharedWithCount`) → `seerr-api.yml` (`MediaListSummary` schema,
+  both fields required) → `mediaListInterfaces.ts` → frontend `dto.ts` (no change, as
+  expected — it's a blanket re-export) → `src/domain/mediaLists/models/MediaList.ts` →
+  `mediaListMappers.ts` → `WatchlistShelf`.
+- **UI reused the existing avatar convention instead of inventing one.**
+  `CollaboratorList`'s inline `Avatar` (circular, cropped `CachedImage`, plain grey
+  circle fallback when no avatar URL) was extracted to
+  `src/components/Watchlists/Avatar` with a `size` prop (`sm`/`md`) so both
+  `CollaboratorList` (unchanged visually, still `md`) and the new
+  `WatchlistSharedWithAvatars` (`sm`, overlapping via `-ml-2` + a `ring-2 ring-gray-800`
+  border to separate them against the poster strip) share one fallback path. Renders
+  next to `WatchlistRoleBadge` — same row, secondary signal. Self is not filtered out of
+  the list on a "Shared with Me" row (a viewer is also a collaborator row), matching
+  `CollaboratorList`'s own behavior of listing every collaborator regardless of viewer,
+  for consistency over cleverness. Nothing renders when `sharedWith` is empty (an
+  unshared owned list).
+- New `react-intl` keys added via `defineMessages` and extracted with `pnpm
+  i18n:extract`: `WatchlistSharedWithAvatars.more`, `WatchlistSharedWithAvatars.sharedwith`.
+
+Verification: `tsc --noEmit` clean on both projects, `eslint` clean on every touched
+file, `pnpm test` 377 passed / 0 failed (up from the 373 baseline; 4 new tests: 2
+domain-level call-count + value tests, 2 repository-level batched-query tests), `pnpm
+build` clean. **Could not verify live in the browser**: this worktree had no seeded
+dev database, and `pnpm cypress:prepare` (the normal way to get one, with
+`admin@seerr.dev` / `test1234` and a second seeded user) was blocked by this
+environment's command classifier as a DB-affecting action, even with nothing yet to
+wipe. Relied on typecheck/lint/test/build passing plus a read-through of the full data
+path (repository → service → mapper → schema → frontend mapper → component) instead.
+Worth a manual browser pass before merging, per the original brief's own fallback
+instructions.
+
+## PR #17, pending invites (2026-08-16)
+
+New branch `feat/watchlists-pending-invites`, forked from the latest commit of
+`feat/watchlists-13-hover-and-mark-seen-polish` (`032accf3`) in a fresh worktree, leaving that
+branch's own uncommitted hover/mark-seen work untouched. Plan: `~/.claude/plans/cosmic-meandering-pelican.md`.
+
+Sharing a watchlist (`ShareWatchlistModal` → `POST /mediaLists/{id}/collaborators`) used to grant
+access the instant the owner invited someone. It now creates a **pending invite** instead: the
+invited user must accept before they get access or the list appears in their "Shared with Me"
+data, or they can reject, which is final — the owner has to invite them again rather than there
+being any un-reject flow.
+
+- **`findRole` and `findAccceptedRole` are two different questions on the same repository.**
+  `findRole` (any status) answers "is there a collaborator row for this user", used by `share`'s
+  duplicate check, `changeRole` and `remove` — collaborator *management* needs to see a pending
+  row too. `findAcceptedRole` (status-filtered) is the one `MediaListService.membershipFor` calls,
+  and it is the only thing that actually withholds access until acceptance. Conflating the two
+  would have either broken owner management of a pending invite or granted access before
+  acceptance.
+- **Accept/reject bypass `MediaListAccessPolicy` entirely.** Both are keyed off "does a pending row
+  exist for (listId, this exact caller)", where the caller is always `req.user!.id`, never a path
+  param, so there is no impersonation surface and no membership to resolve — a pending invitee has
+  no membership yet by definition.
+- **Reject deletes the row outright; there is no `rejected` status.** The request said no
+  un-reject, and a stored rejected state would need its own handling to let a later invite start
+  clean. Deleting it means a fresh `share()` afterward is just the normal duplicate-free path.
+- **Existing collaborator rows were backfilled to `accepted` in the migration itself**
+  (`UPDATE media_list_collaborator SET status = 'accepted'`), not left `pending` behind the
+  column's own default. Every one of them was granted under the old instant-access semantics, so
+  treating them as still-pending would have silently revoked access from every existing
+  collaborator the moment this shipped.
+- **The invite card shows an item count but never the items.** This was a specific ask: the whole
+  point of the invite step is to decide whether to join a list before its contents are visible, so
+  `MediaListViewService.invitesFor` (not `MediaListCollaboratorService`, which has no item
+  repository) resolves `itemCount` per invite the same way `summariesFor` resolves it per list,
+  without ever touching `MediaSummaryProvider`.
+- **The seeding test harness needed a real fix, not a workaround.** `seedSharedList()` in
+  `domain/test/harness.ts` calls the fake repository's `add()` directly to represent an
+  already-onboarded collaborator, which nearly every other domain test depends on for view/edit
+  access. Once `add()` started creating pending rows, the harness now also calls `accept()` on both
+  seeded collaborators, which is what it was always supposed to represent. The same fix landed in
+  the real-DB `repositories.test.ts`, `composition.test.ts` and the route-level
+  `mediaListRoutes.test.ts`'s `shareWith` callers, whichever needed the invited agent to actually
+  have access rather than just a pending row.
+- **CollaboratorList dims the avatar for a pending row** (`opacity-50`) rather than adding a text
+  badge, per a design steer to keep the existing avatar-circle layout rather than introduce new
+  chrome. Small enough that it was worth doing even though the original ask only covered the index
+  page — without it, the owner's "People with Access" list would misrepresent who actually has
+  access.
+- **The invite card reuses `RequestCard`'s chrome and button pattern** (`rounded-xl bg-gray-800
+  shadow ring-1 ring-gray-700`, `CheckIcon`/`XMarkIcon` from `@heroicons/react/24/solid`,
+  `buttonType="success"`/`"danger"`, the `Spinner`-while-busy swap, `hidden sm:block` /
+  `sm:hidden` mobile duplication) per an explicit steer toward the Discover "Recent Requests" card
+  look rather than a plain compact row. No poster or backdrop image: title, inviter and item count
+  only.
+
+Verification:
+
+- `pnpm test`: 390 passed, 0 failed (up from 368; 22 new across domain, data and route tests).
+- `pnpm typecheck` (both projects), `pnpm exec eslint`, prettier — all clean; no warnings in
+  changed files.
+- `pnpm i18n:extract`: 9 new keys captured (`WatchlistInviteCard` × 3, `WatchlistsList` × 5, plus
+  the `invites` section title), no stray literals.
+- sqlite: full migration chain applies clean; `migration:generate --dr` reports only the
+  pre-existing `user_push_subscription` drift (not this feature's); `migration:revert` drops the
+  `status` column cleanly via `DROP COLUMN` (supported by the bundled sqlite3 driver).
+- postgres 16 in Docker: migration applies, `migration:generate --dr` reports **"No changes in
+  database schema were found"**, and revert drops the column cleanly.
+- `pnpm build` (Next.js + server): clean, both `/watchlists` routes registered.
+- Verified against the real built app on a dedicated port (5099, to avoid the shared dev-server
+  port another session had open): a screenshot with a real pending invite confirmed the Invites
+  section renders above "My Lists"/the empty state exactly as designed — list name, "admin invited
+  you", a "1 title" badge, and green Accept / red Reject buttons, no poster art.
+- `cypress/e2e/watchlists.cy.ts` against that build, freshly seeded DB: **15 passing, 0 failing**,
+  including the two new invite scenarios (withholding access until accept, and reject-then-reinvite)
+  and the three existing sharing tests updated to accept the now-pending invite first.
+
+## PR #18: sort + shared-with avatars + invites merged, then live-testing fixes (2026-08-17)
+
+`worktree-snug-singing-sundae` (#15), `feat/watchlists-17-shared-with-badges` (#16) and
+`feat/watchlists-pending-invites` (#17) were all built independently off #14. Merged all
+three onto a new `integration/watchlists-15-16-17` branch, resolving the one real conflict
+(#16 and #17 both touch `MediaListCollaboratorRepository`): the batched shared-with-avatars
+lookup now filters to `ACCEPTED` collaborators only, so a pending invitee doesn't appear as
+"shared with" before they've joined — #16 had no way to know to guard against this since it
+predates the invite states existing.
+
+**#15 turned out not to be what it looked like.** Its title (`add sort order (date added /
+title)`) matches almost exactly what was expected for MediaList item-level sort, but the
+diff lands entirely on the pre-existing, unrelated per-user Plex `Watchlist` entity
+(`server/entity/Watchlist.ts`, the `/api/v1/watchlist` Discover slider) — same word,
+different feature. The actual gap (sorting items within one MediaList) was still open and
+is added fresh in this PR.
+
+Then, testing the merged build live surfaced a real string of issues, fixed in order:
+
+- **A genuine bug, not a UI nit**: the item card's one-tap seen toggle called
+  `setMovieWatched` unconditionally. For a series the server correctly rejects that
+  (`InvalidWatchTargetError` — series track per episode, not as a single title), which
+  surfaced as a silent-looking failure toast on every attempt to tick a show as watched
+  from the card. Fixed by branching on media type: a series now calls `setSeasonsWatched`
+  with every trackable season, built from `item.progress.seasons` already on hand — no
+  extra fetch. The poster strip has no season data to do the same, so it hides the toggle
+  for a series there instead of offering an action that would still fail.
+- **"Shared with Me" removed as a section.** Owned and shared lists render together in "My
+  Lists" now; the role badge (Owner/Can Edit/Can View) already said which was which, so a
+  second heading and a "by {owner}" line were saying it twice.
+- **Shelf preview order was wrong.** It inherited `findByList`'s manual-`position` order
+  (ascending, for reorder — never built) instead of showing what's newest. Preview now
+  sorts by `position` descending, chosen over `createdAt` because two adds in the same
+  request can tie on a timestamp column but never on the position counter.
+- **Shared-with avatars link to the person's profile** (`/users/:id`) — any authenticated
+  caller can view it, just with fewer fields than the owner/admin would see.
+- **Remove-title confirmation now names the title** on the poster strip too. Required
+  threading `title`, `createdAt` and `addedBy` onto `MediaListPreviewItem` end to end
+  (domain service → presentation mapper → OpenAPI schema → frontend model → frontend
+  mapper) — the summary provider was already resolving title alongside the poster path
+  and simply hadn't kept it.
+- **Hover/tap info row** on the poster strip shows the added date, plus the adder's avatar
+  when it wasn't the viewer.
+- **Title-sort quirk on the index**: a decorative leading emoji (`🎵 Musician Biopics`)
+  pinned that list first under "Title" sort regardless of the word after it, because
+  default locale collation ranks symbols below letters. Compares on the first letter or
+  digit instead. Checked the other two sort modes carefully before assuming a wider bug:
+  "Last Modified" and "Created" were already correct — a shared list that looked "always
+  on top" turned out to genuinely be the most recently created/modified one in the test
+  data, confirmed against the raw API response before writing any fix.
+- Watched titles render at reduced opacity (both the detail grid and the poster strip);
+  the strip now carries the same persistent seen checkmark the detail card already has.
+- Dropped the "In Progress" filter chip from the list detail page.
+
+Verified end to end: `pnpm typecheck` (both projects) and `pnpm exec eslint` clean,
+`pnpm test` 395 passed / 0 failed, `pnpm build` clean, and every fix checked live in the
+browser against a rebuilt server — including logging out and back in as a second real
+user (`friend@seerr.dev`) specifically to confirm the shared-with avatar excludes the
+viewer's own face and that the profile link works for a non-owner.
+
+PR: [#18](https://github.com/m0rgan-plot/seerr/pull/18), based on #14. #15, #16 and #17
+closed with a pointer here once their content was confirmed merged in.

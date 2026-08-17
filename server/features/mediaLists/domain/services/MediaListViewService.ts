@@ -16,6 +16,7 @@ import type {
 import type { MediaListAccessPolicy } from '@server/features/mediaLists/domain/services/MediaListAccessPolicy';
 import type { MediaListProgressCalculator } from '@server/features/mediaLists/domain/services/MediaListProgressCalculator';
 import type { MediaListService } from '@server/features/mediaLists/domain/services/MediaListService';
+import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import type { MediaListMembership } from '@server/features/mediaLists/domain/valueObjects/MediaListMembership';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
 import type {
@@ -40,6 +41,8 @@ export interface MediaListPreviewItem {
   id: number;
   tmdbId: number;
   mediaType: MediaListItem['mediaType'];
+  // Null when TMDB no longer knows the title.
+  title: string | null;
   // Null when TMDB has no art, or no longer knows the title.
   posterPath: string | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
@@ -47,6 +50,8 @@ export interface MediaListPreviewItem {
   // Availability in the library, which is what decides between offering a request and
   // reporting one already in flight.
   status: MediaListItem['status'];
+  createdAt: Date;
+  addedBy: UserRef | null;
 }
 
 export interface MediaListSummary {
@@ -55,6 +60,19 @@ export interface MediaListSummary {
   itemCount: number;
   seenCount: number;
   previewItems: MediaListPreviewItem[];
+  // Everyone the list is shared with, for the shelf row's avatar badges. Full set here;
+  // the presentation mapper decides how much of it is worth putting on the wire.
+  sharedWith: UserRef[];
+}
+
+export interface MediaListInviteView {
+  list: MediaList;
+  role: CollaboratorRole;
+  invitedBy: UserRef | null;
+  createdAt: Date;
+  // A count only, never the items themselves: the invite card lets someone decide
+  // whether to accept without first being shown the list's contents.
+  itemCount: number;
 }
 
 // Enough to fill the poster strip on a shelf row without turning the index into a long
@@ -80,6 +98,13 @@ export class MediaListViewService {
   public async summariesFor(userId: number): Promise<MediaListSummary[]> {
     const lists = await this.lists.findAccessibleTo(userId);
 
+    // One query for every list's collaborators, keyed by list id, instead of one per
+    // list inside the map below — that would turn N lists into N more queries on top
+    // of the index's already-documented N+1.
+    const collaboratorsByList = await this.collaborators.findByLists(
+      lists.map((list) => list.id)
+    );
+
     return Promise.all(
       lists.map(async (list) => {
         const [items, membership] = await Promise.all([
@@ -92,13 +117,25 @@ export class MediaListViewService {
           allSeasonCounts: false,
         });
 
+        // findByList orders by position ascending; the preview reads as "what's new on
+        // this list", so it takes the highest positions instead. Manual drag-reorder
+        // was never built (see WATCHLISTS_STATUS.md), so position is still exactly an
+        // insertion counter today -- a more reliable "most recent" signal than a
+        // timestamp column, which two adds in the same request could tie on.
+        const byRecency = [...views].sort(
+          (a, b) => b.item.position - a.item.position
+        );
+
         return {
           list,
           membership,
           itemCount: items.length,
           seenCount: views.filter((view) => view.watched).length,
           previewItems: await this.buildPreview(
-            views.slice(0, PREVIEW_ITEM_COUNT)
+            byRecency.slice(0, PREVIEW_ITEM_COUNT)
+          ),
+          sharedWith: (collaboratorsByList.get(list.id) ?? []).map(
+            (collaborator) => collaborator.user
           ),
         };
       })
@@ -138,6 +175,23 @@ export class MediaListViewService {
       list.owner,
       ...collaborators.map((collaborator) => collaborator.user),
     ];
+  }
+
+  // Every pending invite for the signed-in user, with an item count per list so the
+  // Invites section can show something more than a bare name without touching the
+  // items themselves.
+  public async invitesFor(userId: number): Promise<MediaListInviteView[]> {
+    const invites = await this.collaborators.findPendingInvitesFor(userId);
+
+    return Promise.all(
+      invites.map(async (invite) => ({
+        list: invite.list,
+        role: invite.role,
+        invitedBy: invite.invitedBy,
+        createdAt: invite.createdAt,
+        itemCount: (await this.items.findByList(invite.list.id)).length,
+      }))
+    );
   }
 
   private matchesFilter(
@@ -251,20 +305,24 @@ export class MediaListViewService {
     views: MediaListItemView[]
   ): Promise<MediaListPreviewItem[]> {
     return Promise.all(
-      views.map(async (view) => ({
-        id: view.item.id,
-        tmdbId: view.item.tmdbId,
-        mediaType: view.item.mediaType,
-        watched: view.watched,
-        status: view.item.status,
-        posterPath:
-          (
-            await this.summaries.getSummary(
-              view.item.tmdbId,
-              view.item.mediaType
-            )
-          )?.posterPath ?? null,
-      }))
+      views.map(async (view) => {
+        const summary = await this.summaries.getSummary(
+          view.item.tmdbId,
+          view.item.mediaType
+        );
+
+        return {
+          id: view.item.id,
+          tmdbId: view.item.tmdbId,
+          mediaType: view.item.mediaType,
+          title: summary?.title ?? null,
+          watched: view.watched,
+          status: view.item.status,
+          posterPath: summary?.posterPath ?? null,
+          createdAt: view.item.createdAt,
+          addedBy: view.item.addedBy,
+        };
+      })
     );
   }
 

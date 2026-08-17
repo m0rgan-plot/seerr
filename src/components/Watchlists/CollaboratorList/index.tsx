@@ -1,5 +1,5 @@
 import Button from '@app/components/Common/Button';
-import CachedImage from '@app/components/Common/CachedImage';
+import Avatar from '@app/components/Watchlists/Avatar';
 import type {
   Collaborator,
   CollaboratorRole,
@@ -25,20 +25,6 @@ interface CollaboratorListProps {
   onChangeRole: (userId: number, role: CollaboratorRole) => void;
   onRemove: (userId: number) => void;
 }
-
-const Avatar = ({ user }: { user: MediaListUser }) => (
-  <div className="relative h-9 w-9 flex-none overflow-hidden rounded-full bg-gray-600">
-    {user.avatar && (
-      <CachedImage
-        type="avatar"
-        src={user.avatar}
-        alt=""
-        fill
-        className="object-cover"
-      />
-    )}
-  </div>
-);
 
 const CollaboratorList = ({
   owner,
@@ -74,7 +60,10 @@ const CollaboratorList = ({
             data-testid="watchlist-collaborator"
             className="flex items-center gap-3 border-b border-gray-700 py-2.5"
           >
-            <Avatar user={collaborator.user} />
+            <Avatar
+              user={collaborator.user}
+              pending={collaborator.status === 'pending'}
+            />
             <div className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-100">
               {collaborator.user.displayName}
             </div>

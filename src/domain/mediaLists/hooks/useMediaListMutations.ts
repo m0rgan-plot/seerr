@@ -47,6 +47,11 @@ export const useMediaListMutations = (mediaListId?: number) => {
     []
   );
 
+  const refreshInvites = useCallback(
+    () => Promise.all([mutate(api.invitesKey), mutate(api.mediaListsKey)]),
+    []
+  );
+
   const requireList = (listId?: number): number => {
     const resolved = listId ?? mediaListId;
     if (!resolved) {
@@ -189,6 +194,21 @@ export const useMediaListMutations = (mediaListId?: number) => {
       await refreshCollaborators(id);
       // Losing access changes which lists the index should show.
       await refreshIndex();
+    },
+
+    acceptInvite: async (listId?: number): Promise<Collaborator> => {
+      const id = requireList(listId);
+      const accepted = await api.acceptWatchlistInvite(id);
+      // Accepting moves the list into "Shared with Me", so both caches need to move
+      // together rather than the list flashing as absent between the two refetches.
+      await refreshInvites();
+      return toCollaborator(accepted);
+    },
+
+    rejectInvite: async (listId?: number): Promise<void> => {
+      const id = requireList(listId);
+      await api.rejectWatchlistInvite(id);
+      await refreshInvites();
     },
   };
 };

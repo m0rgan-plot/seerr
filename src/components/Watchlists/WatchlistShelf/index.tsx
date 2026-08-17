@@ -1,6 +1,7 @@
 import Button from '@app/components/Common/Button';
 import WatchlistPosterStrip from '@app/components/Watchlists/WatchlistPosterStrip';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
+import WatchlistSharedWithAvatars from '@app/components/Watchlists/WatchlistSharedWithAvatars';
 import type { MediaListSummary } from '@app/domain/mediaLists/models/MediaList';
 import { canEditItems } from '@app/domain/mediaLists/models/MediaList';
 import defineMessages from '@app/utils/defineMessages';
@@ -15,15 +16,12 @@ import { useIntl } from 'react-intl';
 const messages = defineMessages('components.Watchlists.WatchlistShelf', {
   titlecount: '{count, plural, one {# title} other {# titles}}',
   seencount: '{count} seen',
-  byowner: 'by {name}',
   edit: 'Edit {name}',
   share: 'Share {name}',
 });
 
 interface WatchlistShelfProps {
   list: MediaListSummary;
-  // Shown on lists someone else shared, where the owner is the useful detail.
-  showOwner?: boolean;
   onOpenOptions?: (list: MediaListSummary) => void;
   onAddMedia: (list: MediaListSummary) => void;
   // Only the owner may share, so the entry point is absent rather than disabled.
@@ -32,7 +30,6 @@ interface WatchlistShelfProps {
 
 const WatchlistShelf = ({
   list,
-  showOwner = false,
   onOpenOptions,
   onAddMedia,
   onShare,
@@ -94,23 +91,19 @@ const WatchlistShelf = ({
             {intl.formatMessage(messages.titlecount, { count: list.itemCount })}
           </span>
           <span className="text-gray-600">&middot;</span>
-          {showOwner ? (
-            <span>
-              {intl.formatMessage(messages.byowner, {
-                name: list.owner.displayName,
-              })}
-            </span>
-          ) : (
-            <span>
-              {intl.formatMessage(messages.seencount, {
-                count: list.seenCount,
-              })}
-            </span>
-          )}
+          <span>
+            {intl.formatMessage(messages.seencount, {
+              count: list.seenCount,
+            })}
+          </span>
         </div>
 
         <div className="mt-1 flex items-center gap-2">
           <WatchlistRoleBadge role={list.role} />
+          <WatchlistSharedWithAvatars
+            sharedWith={list.sharedWith}
+            sharedWithCount={list.sharedWithCount}
+          />
         </div>
       </div>
 
