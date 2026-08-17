@@ -41,6 +41,8 @@ export interface MediaListPreviewItem {
   id: number;
   tmdbId: number;
   mediaType: MediaListItem['mediaType'];
+  // Null when TMDB no longer knows the title.
+  title: string | null;
   // Null when TMDB has no art, or no longer knows the title.
   posterPath: string | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
@@ -48,6 +50,8 @@ export interface MediaListPreviewItem {
   // Availability in the library, which is what decides between offering a request and
   // reporting one already in flight.
   status: MediaListItem['status'];
+  createdAt: Date;
+  addedBy: UserRef | null;
 }
 
 export interface MediaListSummary {
@@ -301,20 +305,24 @@ export class MediaListViewService {
     views: MediaListItemView[]
   ): Promise<MediaListPreviewItem[]> {
     return Promise.all(
-      views.map(async (view) => ({
-        id: view.item.id,
-        tmdbId: view.item.tmdbId,
-        mediaType: view.item.mediaType,
-        watched: view.watched,
-        status: view.item.status,
-        posterPath:
-          (
-            await this.summaries.getSummary(
-              view.item.tmdbId,
-              view.item.mediaType
-            )
-          )?.posterPath ?? null,
-      }))
+      views.map(async (view) => {
+        const summary = await this.summaries.getSummary(
+          view.item.tmdbId,
+          view.item.mediaType
+        );
+
+        return {
+          id: view.item.id,
+          tmdbId: view.item.tmdbId,
+          mediaType: view.item.mediaType,
+          title: summary?.title ?? null,
+          watched: view.watched,
+          status: view.item.status,
+          posterPath: summary?.posterPath ?? null,
+          createdAt: view.item.createdAt,
+          addedBy: view.item.addedBy,
+        };
+      })
     );
   }
 

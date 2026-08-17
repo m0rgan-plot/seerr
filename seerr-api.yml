@@ -2176,6 +2176,10 @@ components:
             id:
               type: number
               example: 12
+            title:
+              type: string
+              nullable: true
+              example: 'Dune: Part Two'
             posterPath:
               type: string
               nullable: true
@@ -2187,11 +2191,20 @@ components:
               type: number
               nullable: true
               example: 5
+            createdAt:
+              type: string
+              example: '2026-08-15T03:00:00.000Z'
+            addedBy:
+              description: Null once the person who added the title is deleted.
+              $ref: '#/components/schemas/MediaListUser'
           required:
             - id
+            - title
             - posterPath
             - watched
             - status
+            - createdAt
+            - addedBy
     MediaListSeasonProgress:
       type: object
       properties:
