@@ -8,6 +8,7 @@ import {
   STRANGER,
   WRITER,
 } from '@server/features/mediaLists/domain/test/harness';
+import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
@@ -209,6 +210,62 @@ describe('MediaListViewService', () => {
       assert.deepStrictEqual(
         harness.collaborators.findByListsCalls[0].sort(),
         [first.id, second.id].sort()
+      );
+    });
+  });
+
+  describe('invites', () => {
+    it('lists a pending invite with an item count but resolves no summaries for it', async () => {
+      const harness = buildHarness();
+      const list = await harness.listService.create({
+        name: 'Film club',
+        ownerId: OWNER.id,
+      });
+      await addMovies(harness, list.id, [1, 2]);
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: STRANGER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+
+      const invites = await harness.viewService.invitesFor(STRANGER.id);
+
+      assert.strictEqual(invites.length, 1);
+      assert.strictEqual(invites[0].list.id, list.id);
+      assert.strictEqual(invites[0].itemCount, 2);
+      assert.strictEqual(invites[0].role, CollaboratorRole.READ);
+      assert.strictEqual(invites[0].invitedBy?.id, OWNER.id);
+    });
+
+    it('drops an invite once it is accepted', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: STRANGER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+
+      await harness.collaboratorService.acceptInvite({
+        listId: list.id,
+        userId: STRANGER.id,
+      });
+
+      assert.deepStrictEqual(
+        await harness.viewService.invitesFor(STRANGER.id),
+        []
+      );
+    });
+
+    it('returns nothing for someone with no invites', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      assert.deepStrictEqual(
+        await harness.viewService.invitesFor(STRANGER.id),
+        []
       );
     });
   });

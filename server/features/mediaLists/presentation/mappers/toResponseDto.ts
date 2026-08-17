@@ -1,6 +1,7 @@
 import type { Collaborator } from '@server/features/mediaLists/domain/entities/Collaborator';
 import type { MediaList } from '@server/features/mediaLists/domain/entities/MediaList';
 import type {
+  MediaListInviteView,
   MediaListItemView,
   MediaListSummary,
 } from '@server/features/mediaLists/domain/services/MediaListViewService';
@@ -10,6 +11,7 @@ import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/Us
 import type {
   MediaListCollaborator as MediaListCollaboratorDto,
   MediaList as MediaListDto,
+  MediaListInvite as MediaListInviteDto,
   MediaListItem as MediaListItemDto,
   MediaListRole,
   MediaListSummary as MediaListSummaryDto,
@@ -100,6 +102,18 @@ export const toCollaboratorDto = (
 ): MediaListCollaboratorDto => ({
   user: toUser(collaborator.user),
   role: collaborator.role === CollaboratorRole.WRITE ? 'write' : 'read',
+  status: collaborator.status,
   invitedBy: toOptionalUser(collaborator.invitedBy),
   createdAt: collaborator.createdAt.toISOString(),
+});
+
+export const toMediaListInviteDto = (
+  invite: MediaListInviteView
+): MediaListInviteDto => ({
+  listId: invite.list.id,
+  listName: invite.list.name,
+  role: invite.role === CollaboratorRole.WRITE ? 'write' : 'read',
+  invitedBy: toOptionalUser(invite.invitedBy),
+  itemCount: invite.itemCount,
+  createdAt: invite.createdAt.toISOString(),
 });

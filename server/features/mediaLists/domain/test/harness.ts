@@ -33,6 +33,9 @@ export const buildHarness = () => {
 
   const collaborators = new FakeMediaListCollaboratorRepository(users);
   const lists = new FakeMediaListRepository(users, collaborators);
+  // Same array reference both fakes share, so a list created through `lists` is visible
+  // from `collaborators.findPendingInvitesFor` without a second source of truth.
+  collaborators.lists = lists.lists;
   const items = new FakeMediaListItemRepository(users);
   const watches = new FakeMediaListWatchRepository();
   const tv = new FakeTvMetadataProvider();
@@ -94,7 +97,10 @@ export const buildHarness = () => {
     userDirectory
   );
 
-  // A list owned by OWNER, shared write with WRITER and read with READER.
+  // A list owned by OWNER, shared write with WRITER and read with READER. Both are
+  // seeded as already-accepted collaborators: this represents established membership,
+  // not a fresh invite, which is what every test relying on WRITER/READER having active
+  // access expects.
   const seedSharedList = async () => {
     const list = await listService.create({
       name: 'Sunday Night Sci-Fi',
@@ -107,12 +113,14 @@ export const buildHarness = () => {
       role: CollaboratorRole.WRITE,
       invitedById: OWNER.id,
     });
+    await collaborators.accept(list.id, WRITER.id);
     await collaborators.add({
       listId: list.id,
       userId: READER.id,
       role: CollaboratorRole.READ,
       invitedById: OWNER.id,
     });
+    await collaborators.accept(list.id, READER.id);
     return list;
   };
 

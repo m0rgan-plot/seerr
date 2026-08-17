@@ -4,13 +4,17 @@ import {
   toCollaborator,
   toCollaboratorRole,
 } from '@server/features/mediaLists/data/mappers/collaboratorMapper';
+import { toMediaList } from '@server/features/mediaLists/data/mappers/mediaListMapper';
+import { toOptionalUserRef } from '@server/features/mediaLists/data/mappers/userRefMapper';
 import MediaListCollaboratorRecord from '@server/features/mediaLists/data/orm/MediaListCollaboratorRecord';
 import MediaListRecord from '@server/features/mediaLists/data/orm/MediaListRecord';
 import { rethrowAsDomainError } from '@server/features/mediaLists/data/repositories/constraintErrors';
 import type { Collaborator } from '@server/features/mediaLists/domain/entities/Collaborator';
+import type { MediaListInvite } from '@server/features/mediaLists/domain/entities/MediaListInvite';
 import { DuplicateCollaboratorError } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 import { In } from 'typeorm';
 
 export class TypeOrmMediaListCollaboratorRepository implements MediaListCollaboratorRepository {
@@ -24,7 +28,9 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
   }
 
   // One query for every list the caller can see, rather than one per list, which is
-  // what the index summary needs to avoid deepening its documented N+1.
+  // what the index summary needs to avoid deepening its documented N+1. Accepted only:
+  // this feeds the "shared with" avatars, and a pending invitee hasn't joined the list
+  // yet, so showing their avatar there would say more than is true.
   public async findByLists(
     listIds: number[]
   ): Promise<Map<number, Collaborator[]>> {
@@ -34,7 +40,7 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
     }
 
     const records = await getRepository(MediaListCollaboratorRecord).find({
-      where: { list: { id: In(listIds) } },
+      where: { list: { id: In(listIds) }, status: InviteStatus.ACCEPTED },
       relations: { user: true, invitedBy: true, list: true },
       order: { createdAt: 'ASC' },
     });
@@ -59,6 +65,53 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
     return record ? toCollaboratorRole(record.role) : null;
   }
 
+  public async findAcceptedRole(
+    listId: number,
+    userId: number
+  ): Promise<CollaboratorRole | null> {
+    const record = await getRepository(MediaListCollaboratorRecord).findOne({
+      where: {
+        list: { id: listId },
+        user: { id: userId },
+        status: InviteStatus.ACCEPTED,
+      },
+      select: { id: true, role: true },
+    });
+    return record ? toCollaboratorRole(record.role) : null;
+  }
+
+  public async findPendingInvite(
+    listId: number,
+    userId: number
+  ): Promise<Collaborator | null> {
+    const record = await getRepository(MediaListCollaboratorRecord).findOne({
+      where: {
+        list: { id: listId },
+        user: { id: userId },
+        status: InviteStatus.PENDING,
+      },
+      relations: { user: true, invitedBy: true },
+    });
+    return record ? toCollaborator(record) : null;
+  }
+
+  public async findPendingInvitesFor(
+    userId: number
+  ): Promise<MediaListInvite[]> {
+    const records = await getRepository(MediaListCollaboratorRecord).find({
+      where: { user: { id: userId }, status: InviteStatus.PENDING },
+      relations: { list: { owner: true }, invitedBy: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    return records.map((record) => ({
+      list: toMediaList(record.list),
+      role: toCollaboratorRole(record.role),
+      invitedBy: toOptionalUserRef(record.invitedBy),
+      createdAt: record.createdAt,
+    }));
+  }
+
   public async add(input: {
     listId: number;
     userId: number;
@@ -80,6 +133,7 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
           list,
           user,
           role: input.role,
+          status: InviteStatus.PENDING,
           invitedBy,
         })
       );
@@ -88,6 +142,17 @@ export class TypeOrmMediaListCollaboratorRepository implements MediaListCollabor
     } catch (error) {
       rethrowAsDomainError(error, new DuplicateCollaboratorError());
     }
+  }
+
+  public async accept(listId: number, userId: number): Promise<Collaborator> {
+    const repository = getRepository(MediaListCollaboratorRecord);
+    const record = await repository.findOneOrFail({
+      where: { list: { id: listId }, user: { id: userId } },
+      relations: { user: true, invitedBy: true },
+    });
+
+    record.status = InviteStatus.ACCEPTED;
+    return toCollaborator(await repository.save(record));
   }
 
   public async updateRole(

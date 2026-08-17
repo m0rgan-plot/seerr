@@ -5,6 +5,7 @@ export type {
   MediaListCollaborator as MediaListCollaboratorDto,
   MediaList as MediaListDto,
   MediaListEpisodeRef as MediaListEpisodeRefDto,
+  MediaListInvite as MediaListInviteDto,
   MediaListItem as MediaListItemDto,
   MediaListItemProgress as MediaListItemProgressDto,
   MediaListItemRef as MediaListItemRefDto,

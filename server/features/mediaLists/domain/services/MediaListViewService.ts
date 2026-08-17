@@ -16,6 +16,7 @@ import type {
 import type { MediaListAccessPolicy } from '@server/features/mediaLists/domain/services/MediaListAccessPolicy';
 import type { MediaListProgressCalculator } from '@server/features/mediaLists/domain/services/MediaListProgressCalculator';
 import type { MediaListService } from '@server/features/mediaLists/domain/services/MediaListService';
+import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import type { MediaListMembership } from '@server/features/mediaLists/domain/valueObjects/MediaListMembership';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
 import type {
@@ -58,6 +59,16 @@ export interface MediaListSummary {
   // Everyone the list is shared with, for the shelf row's avatar badges. Full set here;
   // the presentation mapper decides how much of it is worth putting on the wire.
   sharedWith: UserRef[];
+}
+
+export interface MediaListInviteView {
+  list: MediaList;
+  role: CollaboratorRole;
+  invitedBy: UserRef | null;
+  createdAt: Date;
+  // A count only, never the items themselves: the invite card lets someone decide
+  // whether to accept without first being shown the list's contents.
+  itemCount: number;
 }
 
 // Enough to fill the poster strip on a shelf row without turning the index into a long
@@ -151,6 +162,23 @@ export class MediaListViewService {
       list.owner,
       ...collaborators.map((collaborator) => collaborator.user),
     ];
+  }
+
+  // Every pending invite for the signed-in user, with an item count per list so the
+  // Invites section can show something more than a bare name without touching the
+  // items themselves.
+  public async invitesFor(userId: number): Promise<MediaListInviteView[]> {
+    const invites = await this.collaborators.findPendingInvitesFor(userId);
+
+    return Promise.all(
+      invites.map(async (invite) => ({
+        list: invite.list,
+        role: invite.role,
+        invitedBy: invite.invitedBy,
+        createdAt: invite.createdAt,
+        itemCount: (await this.items.findByList(invite.list.id)).length,
+      }))
+    );
   }
 
   private matchesFilter(

@@ -1,12 +1,14 @@
 import type {
   MediaListCollaboratorDto,
   MediaListDto,
+  MediaListInviteDto,
   MediaListItemDto,
   MediaListItemProgressDto,
   MediaListSummaryDto,
 } from '@app/domain/mediaLists/api/dto';
 import {
   collaboratorsKey,
+  invitesKey,
   itemsKey,
   listKey,
   mediaListsKey,
@@ -18,8 +20,10 @@ import {
   toMediaList,
   toMediaListItem,
   toMediaListSummary,
+  toWatchlistInvite,
 } from '@app/domain/mediaLists/mappers/mediaListMappers';
 import type { Collaborator } from '@app/domain/mediaLists/models/Collaborator';
+import type { WatchlistInvite } from '@app/domain/mediaLists/models/Invite';
 import type {
   MediaList,
   MediaListSummary,
@@ -104,6 +108,19 @@ export const useItemProgress = (
     data: useMemo(() => (data ? toItemProgress(data) : undefined), [data]),
     error,
     isLoading: enabled && !!mediaListId && !!itemId && !data && !error,
+    revalidate: () => {
+      mutate();
+    },
+  };
+};
+
+export const useWatchlistInvites = (): Query<WatchlistInvite[]> => {
+  const { data, error, mutate } = useSWR<MediaListInviteDto[]>(invitesKey);
+
+  return {
+    data: useMemo(() => data?.map(toWatchlistInvite), [data]),
+    error,
+    isLoading: !data && !error,
     revalidate: () => {
       mutate();
     },

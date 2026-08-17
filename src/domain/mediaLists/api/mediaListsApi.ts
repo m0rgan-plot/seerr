@@ -14,6 +14,8 @@ import axios from 'axios';
 
 export const mediaListsKey = '/api/v1/mediaLists';
 
+export const invitesKey = `${mediaListsKey}/invites`;
+
 export const listKey = (mediaListId: number) =>
   `${mediaListsKey}/${mediaListId}`;
 
@@ -134,4 +136,19 @@ export const removeCollaborator = async (
   userId: number
 ): Promise<void> => {
   await axios.delete(`${collaboratorsKey(mediaListId)}/${userId}`);
+};
+
+export const acceptWatchlistInvite = async (
+  mediaListId: number
+): Promise<MediaListCollaboratorDto> =>
+  (
+    await axios.post<MediaListCollaboratorDto>(
+      `${listKey(mediaListId)}/invite/accept`
+    )
+  ).data;
+
+export const rejectWatchlistInvite = async (
+  mediaListId: number
+): Promise<void> => {
+  await axios.post(`${listKey(mediaListId)}/invite/reject`);
 };

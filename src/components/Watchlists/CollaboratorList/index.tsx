@@ -60,7 +60,10 @@ const CollaboratorList = ({
             data-testid="watchlist-collaborator"
             className="flex items-center gap-3 border-b border-gray-700 py-2.5"
           >
-            <Avatar user={collaborator.user} />
+            <Avatar
+              user={collaborator.user}
+              pending={collaborator.status === 'pending'}
+            />
             <div className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-100">
               {collaborator.user.displayName}
             </div>
