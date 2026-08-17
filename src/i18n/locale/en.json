@@ -1695,6 +1695,8 @@
   "components.Watchlists.WatchlistDetail.seenfailed": "Something went wrong updating your watched state.",
   "components.Watchlists.WatchlistDetail.seenprogress": "You've seen {watched} of {total}",
   "components.Watchlists.WatchlistDetail.share": "Share",
+  "components.Watchlists.WatchlistDetail.sortadded": "Added Date",
+  "components.Watchlists.WatchlistDetail.sorttitle": "Title",
   "components.Watchlists.WatchlistDetail.unseen": "Unseen",
   "components.Watchlists.WatchlistDetail.watchlists": "Watchlists",
   "components.Watchlists.WatchlistEpisodeTracker.close": "Close episode tracking",

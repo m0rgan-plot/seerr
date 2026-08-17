@@ -1,5 +1,6 @@
 import Avatar from '@app/components/Watchlists/Avatar';
 import type { MediaListUser } from '@app/domain/mediaLists/models/MediaList';
+import { useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
 import { useIntl } from 'react-intl';
 
@@ -19,30 +20,38 @@ interface WatchlistSharedWithAvatarsProps {
 
 // A quiet "who's here" row for the shelf: small overlapping circles, plus an overflow
 // chip when the server held some back. Secondary to the role badge beside it, so it
-// stays small and un-clickable rather than opening the share modal itself.
+// stays small and un-clickable rather than opening the share modal itself. The point is
+// "who am I sharing this with", so the signed-in member's own face never appears here
+// even though the server's count includes them when they are a collaborator, not owner.
 const WatchlistSharedWithAvatars = ({
   sharedWith,
   sharedWithCount,
 }: WatchlistSharedWithAvatarsProps) => {
   const intl = useIntl();
+  const { user } = useUser();
 
-  if (sharedWith.length === 0) {
+  const others = sharedWith.filter((person) => person.id !== user?.id);
+  const othersCount = sharedWith.some((person) => person.id === user?.id)
+    ? sharedWithCount - 1
+    : sharedWithCount;
+
+  if (others.length === 0) {
     return null;
   }
 
-  const overflow = sharedWithCount - sharedWith.length;
+  const overflow = othersCount - others.length;
 
   return (
     <div
       className="flex items-center"
       title={intl.formatMessage(messages.sharedwith, {
-        names: sharedWith.map((user) => user.displayName).join(', '),
+        names: others.map((person) => person.displayName).join(', '),
       })}
     >
-      {sharedWith.map((user, index) => (
+      {others.map((person, index) => (
         <Avatar
-          key={user.id}
-          user={user}
+          key={person.id}
+          user={person}
           size="sm"
           className={`ring-2 ring-gray-800 ${index > 0 ? '-ml-2' : ''}`}
         />

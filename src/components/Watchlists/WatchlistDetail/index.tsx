@@ -24,6 +24,7 @@ import useToasts from '@app/hooks/useToasts';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
 import {
+  BarsArrowDownIcon,
   PencilSquareIcon,
   PlusIcon,
   UserPlusIcon,
@@ -49,9 +50,24 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
   seenfailed: 'Something went wrong updating your watched state.',
+  sortadded: 'Added Date',
+  sorttitle: 'Title',
 });
 
 const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'inprogress', 'seen'];
+
+type ItemSortOption = 'added' | 'title';
+
+const sortItems = <T extends { title: string | null; createdAt: Date }>(
+  items: T[],
+  sortBy: ItemSortOption
+): T[] =>
+  [...items].sort((a, b) => {
+    if (sortBy === 'title') {
+      return (a.title ?? '').localeCompare(b.title ?? '');
+    }
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
 
 const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const intl = useIntl();
@@ -64,6 +80,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const [showDelete, setShowDelete] = useState(false);
   const [trackingItemId, setTrackingItemId] = useState<number | null>(null);
   const [showShare, setShowShare] = useState(false);
+  const [sortBy, setSortBy] = useState<ItemSortOption>('added');
 
   const { data: list, error, isLoading } = useMediaList(mediaListId);
   const {
@@ -110,9 +127,6 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
           )}
           <div className="mt-3 flex items-center gap-3">
             <WatchlistRoleBadge role={list.role} />
-            <span className="text-xs text-gray-500">
-              {list.owner.displayName}
-            </span>
           </div>
         </div>
 
@@ -154,14 +168,37 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
           ))}
         </div>
 
-        {filter === 'all' && items && items.length > 0 && (
-          <div className="text-sm text-gray-400">
-            {intl.formatMessage(messages.seenprogress, {
-              watched: seenCount,
-              total: items.length,
-            })}
+        <div className="flex flex-wrap items-center gap-3">
+          {filter === 'all' && items && items.length > 0 && (
+            <div className="text-sm text-gray-400">
+              {intl.formatMessage(messages.seenprogress, {
+                watched: seenCount,
+                total: items.length,
+              })}
+            </div>
+          )}
+
+          <div className="flex">
+            <span className="inline-flex cursor-default items-center rounded-l-md border border-r-0 border-gray-500 bg-gray-800 px-3 text-gray-100 sm:text-sm">
+              <BarsArrowDownIcon className="h-5 w-5" />
+            </span>
+            <select
+              id="mediaListItemSortBy"
+              name="mediaListItemSortBy"
+              className="rounded-r-only short"
+              data-testid="watchlist-item-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as ItemSortOption)}
+            >
+              <option value="added">
+                {intl.formatMessage(messages.sortadded)}
+              </option>
+              <option value="title">
+                {intl.formatMessage(messages.sorttitle)}
+              </option>
+            </select>
           </div>
-        )}
+        </div>
       </div>
 
       {itemsLoading ? (
@@ -169,49 +206,47 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       ) : items && items.length > 0 ? (
         <>
           <ul className="cards-vertical">
-            {/* Most recently added or reordered first. Watching an item never touches
-                this timestamp, so ticking one off doesn't reshuffle the grid. */}
-            {[...items]
-              .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-              .map((item) => (
-                <li key={item.id}>
-                  <WatchlistItemCard
-                    item={item}
-                    canEdit={canEdit}
-                    episodesOpen={trackingItemId === item.id}
-                    onToggleSeen={async () => {
-                      try {
-                        await setMovieWatched(item.id, !item.watched);
-                      } catch {
-                        addToast(intl.formatMessage(messages.seenfailed), {
-                          appearance: 'error',
-                          autoDismiss: true,
-                        });
-                      }
-                    }}
-                    onOpenEpisodes={() =>
-                      setTrackingItemId((current) =>
-                        current === item.id ? null : item.id
-                      )
+            {/* Default is newest added first. Watching an item never touches createdAt,
+                so ticking one off doesn't reshuffle the grid. */}
+            {sortItems(items, sortBy).map((item) => (
+              <li key={item.id}>
+                <WatchlistItemCard
+                  item={item}
+                  canEdit={canEdit}
+                  episodesOpen={trackingItemId === item.id}
+                  onToggleSeen={async () => {
+                    try {
+                      await setMovieWatched(item.id, !item.watched);
+                    } catch {
+                      addToast(intl.formatMessage(messages.seenfailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
                     }
-                    onRemove={async () => {
-                      try {
-                        await removeItem(item.id);
-                        addToast(intl.formatMessage(messages.removed), {
-                          appearance: 'success',
-                          autoDismiss: true,
-                        });
-                      } catch {
-                        addToast(intl.formatMessage(messages.removefailed), {
-                          appearance: 'error',
-                          autoDismiss: true,
-                        });
-                      }
-                    }}
-                    onRequestUpdate={revalidate}
-                  />
-                </li>
-              ))}
+                  }}
+                  onOpenEpisodes={() =>
+                    setTrackingItemId((current) =>
+                      current === item.id ? null : item.id
+                    )
+                  }
+                  onRemove={async () => {
+                    try {
+                      await removeItem(item.id);
+                      addToast(intl.formatMessage(messages.removed), {
+                        appearance: 'success',
+                        autoDismiss: true,
+                      });
+                    } catch {
+                      addToast(intl.formatMessage(messages.removefailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onRequestUpdate={revalidate}
+                />
+              </li>
+            ))}
           </ul>
 
           {/* Below the grid rather than inside it: the columns are laid out by auto-fill
