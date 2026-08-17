@@ -75,6 +75,7 @@ export class TypeOrmMediaListRepository implements MediaListRepository {
   }
 
   public async delete(id: number): Promise<void> {
-    await getRepository(MediaListRecord).delete(id);
+    // Soft delete: stamps deletedAt rather than removing the row, per MediaListRecord.
+    await getRepository(MediaListRecord).softDelete(id);
   }
 }
