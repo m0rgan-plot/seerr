@@ -75,24 +75,43 @@ describe('MediaListViewService', () => {
 
       const [summary] = await harness.viewService.summariesFor(OWNER.id);
 
-      assert.deepStrictEqual(summary.previewItems, [
-        {
-          id: items[1].id,
-          tmdbId: 12,
-          mediaType: MediaType.MOVIE,
-          posterPath: '/poster-12.jpg',
-          watched: false,
-          status: null,
-        },
-        {
-          id: items[0].id,
-          tmdbId: 11,
-          mediaType: MediaType.MOVIE,
-          posterPath: '/poster-11.jpg',
-          watched: false,
-          status: null,
-        },
-      ]);
+      for (const item of summary.previewItems) {
+        assert.ok(item.createdAt instanceof Date);
+      }
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => ({
+          id: item.id,
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+          title: item.title,
+          posterPath: item.posterPath,
+          watched: item.watched,
+          status: item.status,
+          addedBy: item.addedBy,
+        })),
+        [
+          {
+            id: items[1].id,
+            tmdbId: 12,
+            mediaType: MediaType.MOVIE,
+            title: 'Title 12',
+            posterPath: '/poster-12.jpg',
+            watched: false,
+            status: null,
+            addedBy: OWNER,
+          },
+          {
+            id: items[0].id,
+            tmdbId: 11,
+            mediaType: MediaType.MOVIE,
+            title: 'Title 11',
+            posterPath: '/poster-11.jpg',
+            watched: false,
+            status: null,
+            addedBy: OWNER,
+          },
+        ]
+      );
     });
 
     it('reports the caller watched state on each preview title', async () => {

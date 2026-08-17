@@ -18,6 +18,8 @@ export interface MediaListItemRef {
 
 export interface MediaListPreviewItem extends MediaListItemRef {
   id: number;
+  // Resolved from TMDB alongside the poster. Null when TMDB no longer knows the title.
+  title: string | null;
   // Relative TMDB path, or null when there is no art. Clients build the full URL the
   // same way they do everywhere else.
   posterPath: string | null;
@@ -25,6 +27,9 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   watched: boolean;
   // Where the title stands in the library. Null when nothing has ever tracked it.
   status: MediaStatus | null;
+  createdAt: string;
+  // Null once the person who added it is deleted. The item stays.
+  addedBy: MediaListUser | null;
 }
 
 export interface MediaListSeasonProgress {
