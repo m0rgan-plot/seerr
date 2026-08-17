@@ -20,6 +20,7 @@ import {
   canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
 import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
+import { isSeries } from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
@@ -54,7 +55,7 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   sorttitle: 'Title',
 });
 
-const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'inprogress', 'seen'];
+const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'seen'];
 
 type ItemSortOption = 'added' | 'title';
 
@@ -88,7 +89,8 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
     isLoading: itemsLoading,
     revalidate,
   } = useMediaListItems(mediaListId, filter);
-  const { setMovieWatched, removeItem } = useMediaListMutations(mediaListId);
+  const { setMovieWatched, setSeasonsWatched, removeItem } =
+    useMediaListMutations(mediaListId);
 
   if (error) {
     return <Error statusCode={404} />;
@@ -216,7 +218,21 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
                   episodesOpen={trackingItemId === item.id}
                   onToggleSeen={async () => {
                     try {
-                      await setMovieWatched(item.id, !item.watched);
+                      // A series has no single watched flag server-side -- it tracks
+                      // per episode -- so the same one-tap toggle a movie gets has to
+                      // mark every trackable season instead of the title itself.
+                      if (isSeries(item)) {
+                        const trackableSeasons = (item.progress?.seasons ?? [])
+                          .filter((season) => season.totalEpisodes > 0)
+                          .map((season) => season.seasonNumber);
+                        await setSeasonsWatched(
+                          item.id,
+                          trackableSeasons,
+                          !item.watched
+                        );
+                      } else {
+                        await setMovieWatched(item.id, !item.watched);
+                      }
                     } catch {
                       addToast(intl.formatMessage(messages.seenfailed), {
                         appearance: 'error',

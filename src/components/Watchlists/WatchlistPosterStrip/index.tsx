@@ -1,5 +1,6 @@
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
+import Avatar from '@app/components/Watchlists/Avatar';
 import RemoveWatchlistItemModal from '@app/components/Watchlists/RemoveWatchlistItemModal';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
 import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
@@ -8,6 +9,7 @@ import type { MediaListRef } from '@app/domain/mediaLists/models/MediaList';
 import useClickOutside from '@app/hooks/useClickOutside';
 import { useIsTouch } from '@app/hooks/useIsTouch';
 import useToasts from '@app/hooks/useToasts';
+import { useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
 import { CheckIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
@@ -17,6 +19,8 @@ import { useIntl } from 'react-intl';
 const messages = defineMessages('components.Watchlists.WatchlistPosterStrip', {
   add: 'Add',
   addtitles: 'Add titles to {name}',
+  addedon: 'Added {date}',
+  addedby: 'Added {date} by {name}',
   empty: 'Nothing on this list yet.',
   markseen: 'Mark Seen',
   markunseen: 'Mark Unseen',
@@ -44,6 +48,7 @@ const WatchlistPosterStrip = ({
 }: WatchlistPosterStripProps) => {
   const intl = useIntl();
   const isTouch = useIsTouch();
+  const { user } = useUser();
   const { addToast } = useToasts();
   const { setMovieWatched, removeItem } = useMediaListMutations(listId);
   const [removing, setRemoving] = useState<MediaListRef | null>(null);
@@ -119,6 +124,9 @@ const WatchlistPosterStrip = ({
               }
               className="absolute inset-0"
               onClick={(e) => {
+                // A second tap costs a read-only viewer a real navigation, so touch
+                // only reveals when there is something to reveal beyond the info row
+                // hover shows for free. canAdd gates that the same way it always has.
                 if (isTouch && canAdd && tappedKey !== key) {
                   e.preventDefault();
                   setTappedKey(key);
@@ -157,45 +165,86 @@ const WatchlistPosterStrip = ({
             {item.status && (
               <div
                 className={`pointer-events-none absolute bottom-1.5 right-1.5 z-30 transition-opacity duration-150 ${
-                  canAdd && !isTouch ? 'group-hover:opacity-0' : ''
+                  !isTouch ? 'group-hover:opacity-0' : ''
                 } ${tapped ? 'opacity-0' : ''}`}
               >
                 <WatchlistStatusDot status={item.status} />
               </div>
             )}
 
-            {canAdd && (
-              <div
-                className={`pointer-events-none absolute inset-0 flex flex-col justify-between bg-gray-900 p-1.5 transition duration-150 ${
-                  isTouch
-                    ? tapped
-                      ? 'bg-opacity-70 opacity-100'
-                      : 'bg-opacity-0 opacity-0'
-                    : 'bg-opacity-0 opacity-0 group-hover:bg-opacity-70 group-hover:opacity-100'
-                }`}
-              >
-                <div className="pointer-events-auto flex justify-end gap-1">
-                  <Button
-                    buttonType="ghost"
-                    buttonSize="sm"
-                    onClick={() => onToggleSeen(item)}
-                    title={intl.formatMessage(
-                      item.watched ? messages.markunseen : messages.markseen
-                    )}
-                  >
-                    <CheckIcon />
-                  </Button>
-
-                  <Button
-                    buttonType="danger"
-                    buttonSize="sm"
-                    onClick={() => setRemoving(item)}
-                    title={intl.formatMessage(messages.remove)}
-                  >
-                    <TrashIcon />
-                  </Button>
+            {/* Unconditional now: a mouse hover costs nothing, so everyone gets the
+                added-date/avatar row even on a read-only list. Touch is different --
+                a tap there is a real navigation, so it still only reveals when there
+                are edit actions worth the extra tap (canAdd, via `tapped`, which can
+                only be set when canAdd is true -- see the Link's onClick above). */}
+            <div
+              className={`pointer-events-none absolute inset-0 flex flex-col justify-between bg-gray-900 p-1.5 transition duration-150 ${
+                isTouch
+                  ? tapped
+                    ? 'bg-opacity-70 opacity-100'
+                    : 'bg-opacity-0 opacity-0'
+                  : 'bg-opacity-0 opacity-0 group-hover:bg-opacity-70 group-hover:opacity-100'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <div
+                  className="min-w-0 text-[10px] leading-tight text-gray-300"
+                  title={
+                    item.addedBy && item.addedBy.id !== user?.id
+                      ? intl.formatMessage(messages.addedby, {
+                          date: intl.formatDate(item.createdAt, {
+                            dateStyle: 'medium',
+                          }),
+                          name: item.addedBy.displayName,
+                        })
+                      : intl.formatMessage(messages.addedon, {
+                          date: intl.formatDate(item.createdAt, {
+                            dateStyle: 'medium',
+                          }),
+                        })
+                  }
+                >
+                  {intl.formatDate(item.createdAt, { dateStyle: 'medium' })}
+                  {item.addedBy && item.addedBy.id !== user?.id && (
+                    <Avatar
+                      user={item.addedBy}
+                      size="sm"
+                      className="mt-1 ring-2 ring-gray-800"
+                    />
+                  )}
                 </div>
 
+                {canAdd && (
+                  <div className="pointer-events-auto flex flex-none gap-1">
+                    {/* A series tracks per episode, not as a single title, and the
+                        strip has no season data to mark them all from -- that lives
+                        behind the episode tracker on the detail page instead. */}
+                    {item.mediaType !== 'tv' && (
+                      <Button
+                        buttonType="ghost"
+                        buttonSize="sm"
+                        onClick={() => onToggleSeen(item)}
+                        title={intl.formatMessage(
+                          item.watched ? messages.markunseen : messages.markseen
+                        )}
+                      >
+                        <CheckIcon />
+                      </Button>
+                    )}
+
+                    <Button
+                      buttonType="danger"
+                      buttonSize="sm"
+                      onClick={() => setRemoving(item)}
+                      title={intl.formatMessage(messages.remove)}
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {canAdd && (
                 <div className="pointer-events-auto flex justify-center">
                   <WatchlistRequestButton
                     tmdbId={item.tmdbId}
@@ -204,8 +253,8 @@ const WatchlistPosterStrip = ({
                     className="w-full"
                   />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         );
       })}
@@ -218,6 +267,7 @@ const WatchlistPosterStrip = ({
 
       <RemoveWatchlistItemModal
         show={!!removing}
+        title={removing?.title ?? undefined}
         onConfirm={() => {
           if (removing) {
             onRemove(removing);

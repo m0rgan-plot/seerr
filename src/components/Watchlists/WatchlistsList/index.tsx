@@ -41,6 +41,12 @@ const messages = defineMessages('components.Watchlists.WatchlistsList', {
 
 type SortOption = 'updated' | 'title' | 'created';
 
+// Default collation ranks symbols below letters, so a decorative leading emoji (e.g.
+// "🎵 Musician Biopics") sorts before every plain-lettered title regardless of the word
+// that follows it. Comparing on the first letter or digit instead reads as alphabetical
+// the way a user expects.
+const sortKey = (name: string) => name.replace(/^[^\p{L}\p{N}]+/u, '');
+
 const sortLists = (
   lists: MediaListSummary[],
   sortBy: SortOption
@@ -48,7 +54,7 @@ const sortLists = (
   [...lists].sort((a, b) => {
     switch (sortBy) {
       case 'title':
-        return a.name.localeCompare(b.name);
+        return sortKey(a.name).localeCompare(sortKey(b.name));
       case 'created':
         return b.createdAt.getTime() - a.createdAt.getTime();
       case 'updated':
