@@ -185,9 +185,10 @@ describe('media list routes', () => {
 
       assert.strictEqual(res.body[0].itemCount, 2);
       assert.strictEqual(res.body[0].seenCount, 1);
+      // Most recently added leads, so the second movie comes first.
       assert.deepStrictEqual(
         res.body[0].previewItems.map((item: { tmdbId: number }) => item.tmdbId),
-        [1, 2]
+        [2, 1]
       );
     });
 
