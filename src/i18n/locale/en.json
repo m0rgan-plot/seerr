@@ -1719,6 +1719,8 @@
   "components.Watchlists.WatchlistItemCard.seenbyothers": "{count, plural, one {# other member has seen this} other {# other members have seen this}}",
   "components.Watchlists.WatchlistItemCard.untitled": "Title Unavailable",
   "components.Watchlists.WatchlistPosterStrip.add": "Add",
+  "components.Watchlists.WatchlistPosterStrip.addedby": "Added {date} by {name}",
+  "components.Watchlists.WatchlistPosterStrip.addedon": "Added {date}",
   "components.Watchlists.WatchlistPosterStrip.addtitles": "Add titles to {name}",
   "components.Watchlists.WatchlistPosterStrip.empty": "Nothing on this list yet.",
   "components.Watchlists.WatchlistPosterStrip.markseen": "Mark Seen",

@@ -15,12 +15,17 @@ export interface MediaListRef {
   id: number;
   tmdbId: number;
   mediaType: MediaType;
+  // Resolved from TMDB alongside the poster. Null when TMDB no longer knows the title.
+  title: string | null;
   // Relative TMDB path, or null when there is no art for the title.
   posterPath: string | null;
   // The signed-in member's own state, so hover CTAs know which action to offer.
   watched: boolean;
   // Availability in the library, which decides what the request CTA says.
   status: MediaStatus | null;
+  createdAt: Date;
+  // Null once the person who added it is deleted. The item stays.
+  addedBy: MediaListUser | null;
 }
 
 export interface MediaList {
