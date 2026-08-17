@@ -96,7 +96,9 @@ const WatchlistItemCard = ({
         <div className="absolute inset-0 h-full w-full overflow-hidden">
           <CachedImage
             type="tmdb"
-            className="absolute inset-0 h-full w-full"
+            className={`absolute inset-0 h-full w-full transition-opacity duration-300 ${
+              item.watched ? 'opacity-40' : ''
+            }`}
             alt=""
             src={
               item.posterPath

@@ -131,12 +131,26 @@ const WatchlistPosterStrip = ({
                   src={`https://image.tmdb.org/t/p/w300_and_h450_face${item.posterPath}`}
                   alt=""
                   fill
-                  className="object-cover"
+                  className={`object-cover transition-opacity duration-300 ${
+                    item.watched ? 'opacity-40' : ''
+                  }`}
                 />
               ) : (
                 <div className="h-full w-full bg-gray-800" />
               )}
             </Link>
+
+            {/* Watched is the member's own state, so it stays visible rather than
+                waiting for a hover or tap the way the actions do, matching the
+                detail grid's card. */}
+            {item.watched && (
+              <div
+                data-testid="watchlist-strip-item-seen"
+                className="pointer-events-none absolute right-1.5 top-1.5 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
+              >
+                <CheckIcon className="h-3 w-3" />
+              </div>
+            )}
 
             {/* A quiet stand-in for the status chip below, which only shows once the
                 actions do: on hover for a mouse, on tap for touch. */}
