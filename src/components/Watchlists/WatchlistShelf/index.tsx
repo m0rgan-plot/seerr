@@ -1,6 +1,7 @@
 import Button from '@app/components/Common/Button';
 import WatchlistPosterStrip from '@app/components/Watchlists/WatchlistPosterStrip';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
+import WatchlistSharedWithAvatars from '@app/components/Watchlists/WatchlistSharedWithAvatars';
 import type { MediaListSummary } from '@app/domain/mediaLists/models/MediaList';
 import { canEditItems } from '@app/domain/mediaLists/models/MediaList';
 import defineMessages from '@app/utils/defineMessages';
@@ -111,6 +112,10 @@ const WatchlistShelf = ({
 
         <div className="mt-1 flex items-center gap-2">
           <WatchlistRoleBadge role={list.role} />
+          <WatchlistSharedWithAvatars
+            sharedWith={list.sharedWith}
+            sharedWithCount={list.sharedWithCount}
+          />
         </div>
       </div>
 

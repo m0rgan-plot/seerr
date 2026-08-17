@@ -24,6 +24,10 @@ const toUser = (user: UserRef): MediaListUser => ({
   avatar: user.avatar,
 });
 
+// The index sends this on every list, not just one, so the wire payload is capped to a
+// handful of avatars; sharedWithCount carries the true total for the "+N" overflow badge.
+const SHARED_WITH_LIMIT = 5;
+
 const toOptionalUser = (user: UserRef | null): MediaListUser | null =>
   user ? toUser(user) : null;
 
@@ -66,6 +70,8 @@ export const toMediaListSummaryDto = (
     watched: item.watched,
     status: item.status,
   })),
+  sharedWith: summary.sharedWith.slice(0, SHARED_WITH_LIMIT).map(toUser),
+  sharedWithCount: summary.sharedWith.length,
 });
 
 export const toMediaListItemDto = (

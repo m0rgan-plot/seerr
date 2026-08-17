@@ -55,6 +55,9 @@ export interface MediaListSummary {
   itemCount: number;
   seenCount: number;
   previewItems: MediaListPreviewItem[];
+  // Everyone the list is shared with, for the shelf row's avatar badges. Full set here;
+  // the presentation mapper decides how much of it is worth putting on the wire.
+  sharedWith: UserRef[];
 }
 
 // Enough to fill the poster strip on a shelf row without turning the index into a long
@@ -80,6 +83,13 @@ export class MediaListViewService {
   public async summariesFor(userId: number): Promise<MediaListSummary[]> {
     const lists = await this.lists.findAccessibleTo(userId);
 
+    // One query for every list's collaborators, keyed by list id, instead of one per
+    // list inside the map below — that would turn N lists into N more queries on top
+    // of the index's already-documented N+1.
+    const collaboratorsByList = await this.collaborators.findByLists(
+      lists.map((list) => list.id)
+    );
+
     return Promise.all(
       lists.map(async (list) => {
         const [items, membership] = await Promise.all([
@@ -99,6 +109,9 @@ export class MediaListViewService {
           seenCount: views.filter((view) => view.watched).length,
           previewItems: await this.buildPreview(
             views.slice(0, PREVIEW_ITEM_COUNT)
+          ),
+          sharedWith: (collaboratorsByList.get(list.id) ?? []).map(
+            (collaborator) => collaborator.user
           ),
         };
       })

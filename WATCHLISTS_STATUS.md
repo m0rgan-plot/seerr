@@ -483,3 +483,65 @@ Still open:
 - Frame 1g's "Who can find it" section should be removed from the design (deferred to v2).
 - Frontend mapper unit tests have no runner today; plan keeps the frontend logic-free and relies on
   Cypress. Adding Vitest is an open option if mapper-level tests are wanted.
+
+## PR #17, `feat/watchlists-17-shared-with-badges` (2026-08-16)
+
+Built the "shared with" avatars on `WatchlistShelf` flagged as deferred in the PR #14
+log above, off `feat/watchlists-13-hover-and-mark-seen-polish`. The brief was explicit
+that this must not deepen F4's documented index N+1 (`summariesFor`: 1 + 4N queries for
+N lists today).
+
+- **Query strategy: one batched `IN (...)` lookup, not a per-list query.** Added
+  `MediaListCollaboratorRepository.findByLists(listIds): Promise<Map<number,
+  Collaborator[]>>`, implemented in `TypeOrmMediaListCollaboratorRepository` as a single
+  `find({ where: { list: { id: In(listIds) } }, relations: { user, invitedBy, list } })`
+  and grouped into a map by `record.list.id`. `MediaListViewService.summariesFor` calls
+  it once before the per-list `Promise.all`, then reads from the map inside the loop.
+  Net effect on the index: **+1 query total, not +N** — `summariesFor` is now 2 + 4N
+  rather than 1 + 4N. Mirrors the existing `findMovieWatchesForItems` /
+  `findEpisodeWatchesForItems` batched-by-itemIds pattern in
+  `TypeOrmMediaListWatchRepository`, which was the precedent to follow. A domain test
+  (`MediaListViewService.test.ts`) asserts `findByLists` is called exactly once across
+  two lists via a call-recording fake, and an integration test
+  (`repositories.test.ts`) exercises the real batched query against sqlite.
+- **Wire shape: minimal `MediaListUser` (id, displayName, avatar), capped and counted.**
+  `UserRef` already carried exactly the avatar-rendering fields with nothing sensitive
+  (no email, matching the milestone 9 decision), so no new type was needed — reused the
+  same `toUser` mapper collaborators already use. Server caps `sharedWith` at 5 entries
+  per list (`SHARED_WITH_LIMIT` in `toResponseDto.ts`) since this goes out on every list
+  on the index; `sharedWithCount` carries the true total so the client's "+N" overflow
+  chip is accurate even when the server held some back. The domain layer
+  (`MediaListSummary.sharedWith`) itself carries the full, uncapped list — capping is a
+  presentation-layer decision, not a domain one.
+- **Threaded end to end**: `MediaListCollaboratorRepository` → `MediaListViewService`
+  (`MediaListSummary.sharedWith: UserRef[]`) → `toResponseDto.ts`
+  (`sharedWith`/`sharedWithCount`) → `seerr-api.yml` (`MediaListSummary` schema,
+  both fields required) → `mediaListInterfaces.ts` → frontend `dto.ts` (no change, as
+  expected — it's a blanket re-export) → `src/domain/mediaLists/models/MediaList.ts` →
+  `mediaListMappers.ts` → `WatchlistShelf`.
+- **UI reused the existing avatar convention instead of inventing one.**
+  `CollaboratorList`'s inline `Avatar` (circular, cropped `CachedImage`, plain grey
+  circle fallback when no avatar URL) was extracted to
+  `src/components/Watchlists/Avatar` with a `size` prop (`sm`/`md`) so both
+  `CollaboratorList` (unchanged visually, still `md`) and the new
+  `WatchlistSharedWithAvatars` (`sm`, overlapping via `-ml-2` + a `ring-2 ring-gray-800`
+  border to separate them against the poster strip) share one fallback path. Renders
+  next to `WatchlistRoleBadge` — same row, secondary signal. Self is not filtered out of
+  the list on a "Shared with Me" row (a viewer is also a collaborator row), matching
+  `CollaboratorList`'s own behavior of listing every collaborator regardless of viewer,
+  for consistency over cleverness. Nothing renders when `sharedWith` is empty (an
+  unshared owned list).
+- New `react-intl` keys added via `defineMessages` and extracted with `pnpm
+  i18n:extract`: `WatchlistSharedWithAvatars.more`, `WatchlistSharedWithAvatars.sharedwith`.
+
+Verification: `tsc --noEmit` clean on both projects, `eslint` clean on every touched
+file, `pnpm test` 377 passed / 0 failed (up from the 373 baseline; 4 new tests: 2
+domain-level call-count + value tests, 2 repository-level batched-query tests), `pnpm
+build` clean. **Could not verify live in the browser**: this worktree had no seeded
+dev database, and `pnpm cypress:prepare` (the normal way to get one, with
+`admin@seerr.dev` / `test1234` and a second seeded user) was blocked by this
+environment's command classifier as a DB-affecting action, even with nothing yet to
+wipe. Relied on typecheck/lint/test/build passing plus a read-through of the full data
+path (repository → service → mapper → schema → frontend mapper → component) instead.
+Worth a manual browser pass before merging, per the original brief's own fallback
+instructions.

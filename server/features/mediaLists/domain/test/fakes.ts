@@ -155,11 +155,28 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
 
 export class FakeMediaListCollaboratorRepository implements MediaListCollaboratorRepository {
   public rows: (Collaborator & { listId: number })[] = [];
+  // Records every call's argument list, so a test can assert the batched lookup fires
+  // once per request rather than once per list.
+  public findByListsCalls: number[][] = [];
 
   constructor(private readonly users: Map<number, UserRef>) {}
 
   async findByList(listId: number): Promise<Collaborator[]> {
     return this.rows.filter((row) => row.listId === listId);
+  }
+
+  async findByLists(listIds: number[]): Promise<Map<number, Collaborator[]>> {
+    this.findByListsCalls.push(listIds);
+
+    const byList = new Map<number, Collaborator[]>();
+    this.rows
+      .filter((row) => listIds.includes(row.listId))
+      .forEach((row) => {
+        const collaborators = byList.get(row.listId) ?? [];
+        collaborators.push(row);
+        byList.set(row.listId, collaborators);
+      });
+    return byList;
   }
 
   async findRole(
