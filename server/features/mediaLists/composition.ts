@@ -1,3 +1,7 @@
+// User-facing name for this feature is "Watchlists" (see client copy), but it's named
+// 'MediaList' internally and routed at '/api/v1/mediaLists' (plural, camelCase) because
+// 'Watchlist'/'/api/v1/watchlist' was already taken by the older, unrelated Plex-synced
+// auto-request feature — see server/entity/Watchlist.ts.
 import { NotificationGatewayImpl } from '@server/features/mediaLists/data/providers/NotificationGatewayImpl';
 import { TmdbMediaSummaryProvider } from '@server/features/mediaLists/data/providers/TmdbMediaSummaryProvider';
 import { TmdbTvMetadataProvider } from '@server/features/mediaLists/data/providers/TmdbTvMetadataProvider';

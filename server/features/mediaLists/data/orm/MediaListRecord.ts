@@ -2,6 +2,7 @@ import { User } from '@server/entity/User';
 import { DbAwareColumn, resolveDbType } from '@server/utils/DbColumnHelper';
 import {
   Column,
+  DeleteDateColumn,
   Entity,
   Index,
   ManyToOne,
@@ -36,6 +37,11 @@ export class MediaListRecord {
     default: () => 'CURRENT_TIMESTAMP',
   })
   public updatedAt: Date;
+
+  // Soft delete: TypeORM excludes rows with this set from every find()/findOne() and
+  // query builder read on this entity, so `delete` only needs to stamp it.
+  @DeleteDateColumn()
+  public deletedAt?: Date | null;
 
   constructor(init?: Partial<MediaListRecord>) {
     Object.assign(this, init);
