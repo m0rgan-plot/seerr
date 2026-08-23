@@ -26,6 +26,11 @@ export class NotFoundError extends Error {
   }
 }
 
+// This is the original Plex-synced auto-request feature: a flat per-user marker
+// ("this user wants this title"), synced from their Plex watchlist, mounted at
+// '/api/v1/watchlist' (singular). It predates and is unrelated to the newer
+// user-created, shareable, multi-list feature — see server/features/mediaLists,
+// which had to be named 'MediaList' internally to avoid colliding with this entity.
 @Entity()
 @Unique('UNIQUE_USER_DB', ['tmdbId', 'mediaType', 'requestedBy'])
 export class Watchlist implements WatchlistItem {

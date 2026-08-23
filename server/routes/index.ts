@@ -158,6 +158,11 @@ router.use('/settings', isAuthenticated(Permission.ADMIN), settingsRoutes);
 router.use('/search', isAuthenticated(), searchRoutes);
 router.use('/discover', isAuthenticated(), discoverRoutes);
 router.use('/request', isAuthenticated(), requestRoutes);
+// '/watchlist' (singular) is the original Plex-synced auto-request feature: a flat
+// per-user marker list, unrelated to the user-created, shareable lists below. That name
+// was already taken, so the newer feature is named/routed as 'mediaLists' internally even
+// though the UI still calls it "Watchlists" — see server/entity/Watchlist.ts and
+// server/features/mediaLists/composition.ts for each feature's own note on this split.
 router.use('/watchlist', isAuthenticated(), watchlistRoutes);
 router.use('/mediaLists', isAuthenticated(), mediaListRoutes);
 router.use('/blocklist', isAuthenticated(), blocklistRoutes);
