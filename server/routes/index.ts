@@ -7,6 +7,7 @@ import type {
 } from '@server/api/themoviedb/interfaces';
 import { getRepository } from '@server/datasource';
 import DiscoverSlider from '@server/entity/DiscoverSlider';
+import mediaListRoutes from '@server/features/mediaLists/presentation/routes';
 import type { StatusResponse } from '@server/interfaces/api/settingsInterfaces';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
@@ -157,7 +158,13 @@ router.use('/settings', isAuthenticated(Permission.ADMIN), settingsRoutes);
 router.use('/search', isAuthenticated(), searchRoutes);
 router.use('/discover', isAuthenticated(), discoverRoutes);
 router.use('/request', isAuthenticated(), requestRoutes);
+// '/watchlist' (singular) is the original Plex-synced auto-request feature: a flat
+// per-user marker list, unrelated to the user-created, shareable lists below. That name
+// was already taken, so the newer feature is named/routed as 'mediaLists' internally even
+// though the UI still calls it "Watchlists" — see server/entity/Watchlist.ts and
+// server/features/mediaLists/composition.ts for each feature's own note on this split.
 router.use('/watchlist', isAuthenticated(), watchlistRoutes);
+router.use('/mediaLists', isAuthenticated(), mediaListRoutes);
 router.use('/blocklist', isAuthenticated(), blocklistRoutes);
 router.use(
   '/blacklist',
