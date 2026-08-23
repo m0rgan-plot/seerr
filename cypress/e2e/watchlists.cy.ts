@@ -35,6 +35,11 @@ const shareWithFriend = (listId: number, role: 'read' | 'write') =>
       });
     });
 
+// Sharing only creates a pending invite now, so tests about what a role can do accept it
+// over the API first rather than exercising the invite UI on every one of them.
+const acceptInviteViaApi = (listId: number) =>
+  cy.request('POST', `/api/v1/mediaLists/${listId}/invite/accept`);
+
 const openCard = (tmdbId: number) => {
   // React synthesises enter and leave from mouseover and mouseout, so a mouseenter
   // dispatched on its own never reaches the handler.
@@ -299,6 +304,7 @@ describe('Watchlists', () => {
       shareWithFriend(this.listId, 'read');
 
       cy.loginAsUser();
+      acceptInviteViaApi(this.listId);
       cy.visit('/watchlists');
 
       // A shared list is filed separately from the ones you own.
@@ -322,6 +328,7 @@ describe('Watchlists', () => {
       shareWithFriend(this.listId, 'write');
 
       cy.loginAsUser();
+      acceptInviteViaApi(this.listId);
       cy.visit(`/watchlists/${this.listId}`);
 
       cy.contains('button', 'Add Media').should('exist');
@@ -329,6 +336,53 @@ describe('Watchlists', () => {
       cy.contains('button', 'Share').should('not.exist');
       cy.contains('button', 'Edit').click();
       cy.contains('button', 'Delete List').should('not.exist');
+    });
+
+    it('withholds access until the invite is accepted through the Invites card', function () {
+      shareWithFriend(this.listId, 'read');
+
+      cy.loginAsUser();
+      cy.visit('/watchlists');
+
+      // Not accepted yet, so it must not read as a list the friend already has. The
+      // friend owns nothing either, so the empty state renders and no shelf exists yet.
+      cy.contains('Shared with Me').should('not.exist');
+      cy.get('[data-testid=watchlist-shelf]').should('not.exist');
+
+      cy.get('[data-testid=watchlist-invite-card]')
+        .should('have.length', 1)
+        .and('contain', 'Film club')
+        .and('contain', 'admin');
+      cy.get('[data-testid=watchlist-invite-card]')
+        .contains('button', 'Accept')
+        .click();
+
+      cy.get('[data-testid=watchlist-invite-card]').should('not.exist');
+      cy.contains('Shared with Me');
+      cy.get('[data-testid=watchlist-shelf]').should('contain', 'Film club');
+    });
+
+    it('rejecting an invite is final, and the owner can invite again', function () {
+      shareWithFriend(this.listId, 'read');
+
+      cy.loginAsUser();
+      cy.visit('/watchlists');
+
+      cy.get('[data-testid=watchlist-invite-card]')
+        .contains('button', 'Reject')
+        .click();
+
+      cy.get('[data-testid=watchlist-invite-card]').should('not.exist');
+      cy.get('[data-testid=watchlist-shelf]').should('not.exist');
+
+      cy.loginAsAdmin();
+      shareWithFriend(this.listId, 'write');
+
+      cy.loginAsUser();
+      cy.visit('/watchlists');
+      cy.get('[data-testid=watchlist-invite-card]')
+        .should('have.length', 1)
+        .and('contain', 'Film club');
     });
   });
 });

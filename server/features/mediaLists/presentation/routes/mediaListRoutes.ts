@@ -3,6 +3,7 @@ import { toUserRef } from '@server/features/mediaLists/data/mappers/userRefMappe
 import {
   toCollaboratorDto,
   toMediaListDto,
+  toMediaListInviteDto,
   toMediaListSummaryDto,
 } from '@server/features/mediaLists/presentation/mappers/toResponseDto';
 import { toHttpError } from '@server/features/mediaLists/presentation/routes/errorMapping';
@@ -40,6 +41,19 @@ router.post('/', async (req, res, next) => {
     });
 
     return res.status(201).json(toMediaListDto(list, { kind: 'owner' }));
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+// Declared before "/:mediaListId" so "invites" is never read as a list id, the same
+// reason "reorder" precedes ":itemId" in mediaListItemRoutes.ts.
+router.get('/invites', async (req, res, next) => {
+  try {
+    const { views } = getMediaListServices();
+    const invites = await views.invitesFor(req.user!.id);
+
+    return res.status(200).json(invites.map(toMediaListInviteDto));
   } catch (error) {
     return next(toHttpError(error));
   }
@@ -134,6 +148,38 @@ router.put('/:mediaListId/collaborators/:userId', async (req, res, next) => {
     });
 
     return res.status(200).json(toCollaboratorDto(collaborator));
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+router.post('/:mediaListId/invite/accept', async (req, res, next) => {
+  try {
+    const listId = listIdParam.parse(req.params.mediaListId);
+    const { collaborators } = getMediaListServices();
+
+    const collaborator = await collaborators.acceptInvite({
+      listId,
+      userId: req.user!.id,
+    });
+
+    return res.status(200).json(toCollaboratorDto(collaborator));
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+router.post('/:mediaListId/invite/reject', async (req, res, next) => {
+  try {
+    const listId = listIdParam.parse(req.params.mediaListId);
+    const { collaborators } = getMediaListServices();
+
+    await collaborators.rejectInvite({
+      listId,
+      userId: req.user!.id,
+    });
+
+    return res.status(204).send();
   } catch (error) {
     return next(toHttpError(error));
   }

@@ -9,6 +9,7 @@ import {
   WRITER,
   buildHarness,
 } from '@server/features/mediaLists/domain/test/harness';
+import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
@@ -81,6 +82,30 @@ describe('MediaListService', () => {
       () => listService.view(list.id, STRANGER.id),
       MediaListAccessDeniedError
     );
+  });
+
+  // A row exists the moment share() is called, but it grants nothing until accepted.
+  it('denies access to a pending invite until it is accepted', async () => {
+    const { listService, collaborators } = buildHarness();
+    const list = await listService.create({
+      name: 'Film club',
+      ownerId: OWNER.id,
+    });
+    await collaborators.add({
+      listId: list.id,
+      userId: STRANGER.id,
+      role: CollaboratorRole.READ,
+      invitedById: OWNER.id,
+    });
+
+    await assert.rejects(
+      () => listService.view(list.id, STRANGER.id),
+      MediaListAccessDeniedError
+    );
+
+    await collaborators.accept(list.id, STRANGER.id);
+    const seen = await listService.view(list.id, STRANGER.id);
+    assert.strictEqual(seen.id, list.id);
   });
 
   describe('update', () => {

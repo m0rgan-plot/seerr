@@ -1,7 +1,8 @@
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
-import StatusBadgeMini from '@app/components/Common/StatusBadgeMini';
+import RemoveWatchlistItemModal from '@app/components/Watchlists/RemoveWatchlistItemModal';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
+import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
 import type { MediaListItem } from '@app/domain/mediaLists/models/MediaListItem';
 import { isSeries } from '@app/domain/mediaLists/models/MediaListItem';
 import { useIsTouch } from '@app/hooks/useIsTouch';
@@ -13,7 +14,6 @@ import {
   ListBulletIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { MediaStatus } from '@server/constants/media';
 import Link from 'next/link';
 import { Fragment, useState } from 'react';
 import { useIntl } from 'react-intl';
@@ -53,6 +53,7 @@ const WatchlistItemCard = ({
   const isTouch = useIsTouch();
 
   const [showDetail, setShowDetail] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const series = isSeries(item);
   const title = item.title ?? intl.formatMessage(messages.untitled);
@@ -132,12 +133,6 @@ const WatchlistItemCard = ({
                   <CheckIcon className="h-3 w-3" />
                 </div>
               )}
-              {!!item.status && item.status !== MediaStatus.UNKNOWN && (
-                <div className="pointer-events-none z-40 flex">
-                  <StatusBadgeMini status={item.status} shrink />
-                </div>
-              )}
-
               {/* The list actions sit here, where a title card keeps its own secondary
                   actions, because the foot of the card is only wide enough for one. */}
               {showDetail && (
@@ -164,7 +159,7 @@ const WatchlistItemCard = ({
                       buttonSize="sm"
                       onClick={(e) => {
                         e.preventDefault();
-                        onRemove();
+                        setConfirmingRemove(true);
                       }}
                       title={intl.formatMessage(messages.removelabel, {
                         title,
@@ -186,6 +181,18 @@ const WatchlistItemCard = ({
                 className="h-full bg-indigo-500"
                 style={{ width: `${progressPercent}%` }}
               />
+            </div>
+          )}
+
+          {/* A quiet stand-in for the status chip, which only shows on hover: gone the
+              moment the chip takes over so the two are never on screen together. */}
+          {item.status && (
+            <div
+              className={`absolute bottom-2 right-2 z-30 transition-opacity duration-150 ${
+                showDetail ? 'pointer-events-none opacity-0' : 'opacity-100'
+              }`}
+            >
+              <WatchlistStatusDot status={item.status} />
             </div>
           )}
 
@@ -276,6 +283,16 @@ const WatchlistItemCard = ({
           </Transition>
         </div>
       </div>
+
+      <RemoveWatchlistItemModal
+        show={confirmingRemove}
+        title={title}
+        onConfirm={() => {
+          setConfirmingRemove(false);
+          onRemove();
+        }}
+        onCancel={() => setConfirmingRemove(false)}
+      />
     </div>
   );
 };

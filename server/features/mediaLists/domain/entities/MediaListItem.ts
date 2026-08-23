@@ -14,4 +14,8 @@ export interface MediaListItem {
   // Null once the person who added it is deleted. The item stays.
   addedBy: UserRef | null;
   createdAt: Date;
+  // Bumped only by adding the item or reordering the list; a member's own watched
+  // state lives in a separate table and never touches this row. That is what makes
+  // it useful for a "recently added or moved" sort, unlike watched, which is per user.
+  updatedAt: Date;
 }

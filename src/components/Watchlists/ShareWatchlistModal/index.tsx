@@ -11,7 +11,7 @@ import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.ShareWatchlistModal', {
@@ -56,6 +56,14 @@ const ShareWatchlistModal = ({
   const [inviting, setInviting] = useState(false);
   const [pickerKey, setPickerKey] = useState(0);
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
+
+  // The user picker caches its own option list once loaded, so it can go stale for a
+  // list left open across an invite elsewhere. Remount it fresh on every open.
+  useEffect(() => {
+    if (show) {
+      setPickerKey((current) => current + 1);
+    }
+  }, [show]);
 
   const onInvite = async () => {
     if (!selectedUserId) {

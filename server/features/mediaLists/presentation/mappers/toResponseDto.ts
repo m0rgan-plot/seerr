@@ -1,6 +1,7 @@
 import type { Collaborator } from '@server/features/mediaLists/domain/entities/Collaborator';
 import type { MediaList } from '@server/features/mediaLists/domain/entities/MediaList';
 import type {
+  MediaListInviteView,
   MediaListItemView,
   MediaListSummary,
 } from '@server/features/mediaLists/domain/services/MediaListViewService';
@@ -10,6 +11,7 @@ import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/Us
 import type {
   MediaListCollaborator as MediaListCollaboratorDto,
   MediaList as MediaListDto,
+  MediaListInvite as MediaListInviteDto,
   MediaListItem as MediaListItemDto,
   MediaListRole,
   MediaListSummary as MediaListSummaryDto,
@@ -23,6 +25,10 @@ const toUser = (user: UserRef): MediaListUser => ({
   displayName: user.displayName,
   avatar: user.avatar,
 });
+
+// The index sends this on every list, not just one, so the wire payload is capped to a
+// handful of avatars; sharedWithCount carries the true total for the "+N" overflow badge.
+const SHARED_WITH_LIMIT = 5;
 
 const toOptionalUser = (user: UserRef | null): MediaListUser | null =>
   user ? toUser(user) : null;
@@ -66,6 +72,8 @@ export const toMediaListSummaryDto = (
     watched: item.watched,
     status: item.status,
   })),
+  sharedWith: summary.sharedWith.slice(0, SHARED_WITH_LIMIT).map(toUser),
+  sharedWithCount: summary.sharedWith.length,
 });
 
 export const toMediaListItemDto = (
@@ -83,6 +91,7 @@ export const toMediaListItemDto = (
   status: view.item.status,
   addedBy: toOptionalUser(view.item.addedBy),
   createdAt: view.item.createdAt.toISOString(),
+  updatedAt: view.item.updatedAt.toISOString(),
   watched: view.watched,
   progress: view.progress,
   seenBy: seenBy.map(toUser),
@@ -93,6 +102,18 @@ export const toCollaboratorDto = (
 ): MediaListCollaboratorDto => ({
   user: toUser(collaborator.user),
   role: collaborator.role === CollaboratorRole.WRITE ? 'write' : 'read',
+  status: collaborator.status,
   invitedBy: toOptionalUser(collaborator.invitedBy),
   createdAt: collaborator.createdAt.toISOString(),
+});
+
+export const toMediaListInviteDto = (
+  invite: MediaListInviteView
+): MediaListInviteDto => ({
+  listId: invite.list.id,
+  listName: invite.list.name,
+  role: invite.role === CollaboratorRole.WRITE ? 'write' : 'read',
+  invitedBy: toOptionalUser(invite.invitedBy),
+  itemCount: invite.itemCount,
+  createdAt: invite.createdAt.toISOString(),
 });

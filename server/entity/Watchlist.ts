@@ -6,6 +6,7 @@ import { User } from '@server/entity/User';
 import type { WatchlistItem } from '@server/interfaces/api/discoverInterfaces';
 import logger from '@server/logger';
 import { DbAwareColumn, resolveDbType } from '@server/utils/DbColumnHelper';
+import type { FindOptionsOrder } from 'typeorm';
 import {
   Column,
   Entity,
@@ -74,6 +75,14 @@ export class Watchlist implements WatchlistItem {
 
   constructor(init?: Partial<Watchlist>) {
     Object.assign(this, init);
+  }
+
+  public static getSortOrder(sortBy?: string): FindOptionsOrder<Watchlist> {
+    if (sortBy === 'title') {
+      return { title: 'ASC' };
+    }
+
+    return { createdAt: 'DESC' };
   }
 
   public static async createWatchlist({

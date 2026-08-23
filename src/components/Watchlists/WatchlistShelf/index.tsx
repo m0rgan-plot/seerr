@@ -1,12 +1,13 @@
 import Button from '@app/components/Common/Button';
 import WatchlistPosterStrip from '@app/components/Watchlists/WatchlistPosterStrip';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
+import WatchlistSharedWithAvatars from '@app/components/Watchlists/WatchlistSharedWithAvatars';
 import type { MediaListSummary } from '@app/domain/mediaLists/models/MediaList';
 import { canEditItems } from '@app/domain/mediaLists/models/MediaList';
 import defineMessages from '@app/utils/defineMessages';
 import {
   ChevronRightIcon,
-  EllipsisVerticalIcon,
+  PencilIcon,
   UserPlusIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
@@ -16,7 +17,7 @@ const messages = defineMessages('components.Watchlists.WatchlistShelf', {
   titlecount: '{count, plural, one {# title} other {# titles}}',
   seencount: '{count} seen',
   byowner: 'by {name}',
-  options: 'Options for {name}',
+  edit: 'Edit {name}',
   share: 'Share {name}',
 });
 
@@ -73,11 +74,11 @@ const WatchlistShelf = ({
                 buttonType="ghost"
                 buttonSize="sm"
                 onClick={() => onOpenOptions(list)}
-                title={intl.formatMessage(messages.options, {
+                title={intl.formatMessage(messages.edit, {
                   name: list.name,
                 })}
               >
-                <EllipsisVerticalIcon />
+                <PencilIcon />
               </Button>
             )}
           </div>
@@ -111,6 +112,10 @@ const WatchlistShelf = ({
 
         <div className="mt-1 flex items-center gap-2">
           <WatchlistRoleBadge role={list.role} />
+          <WatchlistSharedWithAvatars
+            sharedWith={list.sharedWith}
+            sharedWithCount={list.sharedWithCount}
+          />
         </div>
       </div>
 

@@ -16,6 +16,7 @@ import type {
 import type { MediaListAccessPolicy } from '@server/features/mediaLists/domain/services/MediaListAccessPolicy';
 import type { MediaListProgressCalculator } from '@server/features/mediaLists/domain/services/MediaListProgressCalculator';
 import type { MediaListService } from '@server/features/mediaLists/domain/services/MediaListService';
+import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import type { MediaListMembership } from '@server/features/mediaLists/domain/valueObjects/MediaListMembership';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
 import type {
@@ -55,6 +56,19 @@ export interface MediaListSummary {
   itemCount: number;
   seenCount: number;
   previewItems: MediaListPreviewItem[];
+  // Everyone the list is shared with, for the shelf row's avatar badges. Full set here;
+  // the presentation mapper decides how much of it is worth putting on the wire.
+  sharedWith: UserRef[];
+}
+
+export interface MediaListInviteView {
+  list: MediaList;
+  role: CollaboratorRole;
+  invitedBy: UserRef | null;
+  createdAt: Date;
+  // A count only, never the items themselves: the invite card lets someone decide
+  // whether to accept without first being shown the list's contents.
+  itemCount: number;
 }
 
 // Enough to fill the poster strip on a shelf row without turning the index into a long
@@ -80,6 +94,13 @@ export class MediaListViewService {
   public async summariesFor(userId: number): Promise<MediaListSummary[]> {
     const lists = await this.lists.findAccessibleTo(userId);
 
+    // One query for every list's collaborators, keyed by list id, instead of one per
+    // list inside the map below — that would turn N lists into N more queries on top
+    // of the index's already-documented N+1.
+    const collaboratorsByList = await this.collaborators.findByLists(
+      lists.map((list) => list.id)
+    );
+
     return Promise.all(
       lists.map(async (list) => {
         const [items, membership] = await Promise.all([
@@ -99,6 +120,9 @@ export class MediaListViewService {
           seenCount: views.filter((view) => view.watched).length,
           previewItems: await this.buildPreview(
             views.slice(0, PREVIEW_ITEM_COUNT)
+          ),
+          sharedWith: (collaboratorsByList.get(list.id) ?? []).map(
+            (collaborator) => collaborator.user
           ),
         };
       })
@@ -138,6 +162,23 @@ export class MediaListViewService {
       list.owner,
       ...collaborators.map((collaborator) => collaborator.user),
     ];
+  }
+
+  // Every pending invite for the signed-in user, with an item count per list so the
+  // Invites section can show something more than a bare name without touching the
+  // items themselves.
+  public async invitesFor(userId: number): Promise<MediaListInviteView[]> {
+    const invites = await this.collaborators.findPendingInvitesFor(userId);
+
+    return Promise.all(
+      invites.map(async (invite) => ({
+        list: invite.list,
+        role: invite.role,
+        invitedBy: invite.invitedBy,
+        createdAt: invite.createdAt,
+        itemCount: (await this.items.findByList(invite.list.id)).length,
+      }))
+    );
   }
 
   private matchesFilter(

@@ -17,7 +17,9 @@ export class MediaListService {
     list: MediaList,
     userId: number
   ): Promise<MediaListMembership> {
-    const role = await this.collaborators.findRole(list.id, userId);
+    // Only an accepted row grants access. findRole (any status) is reserved for
+    // collaborator management, which needs to see a pending row too.
+    const role = await this.collaborators.findAcceptedRole(list.id, userId);
     return this.access.resolveMembership(list, userId, role);
   }
 

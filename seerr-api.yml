@@ -2280,10 +2280,23 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/MediaListPreviewItem'
+            sharedWith:
+              type: array
+              description: >-
+                Who the list is shared with, for the shelf row's avatar badges. Capped
+                to a handful of entries server-side; see sharedWithCount for the true
+                total.
+              items:
+                $ref: '#/components/schemas/MediaListUser'
+            sharedWithCount:
+              type: number
+              example: 2
           required:
             - itemCount
             - seenCount
             - previewItems
+            - sharedWith
+            - sharedWithCount
     MediaListItem:
       type: object
       properties:
@@ -2329,6 +2342,12 @@ components:
         createdAt:
           type: string
           example: '2026-08-15T03:00:00.000Z'
+        updatedAt:
+          description: >-
+            Bumped by adding the item or reordering the list, not by any member's
+            watched state.
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
         watched:
           type: boolean
           example: false
@@ -2351,6 +2370,7 @@ components:
         - status
         - addedBy
         - createdAt
+        - updatedAt
         - watched
         - progress
         - seenBy
@@ -2386,6 +2406,10 @@ components:
         role:
           type: string
           enum: [write, read]
+        status:
+          description: Pending until the invited user accepts. Rejecting deletes the row instead of storing a rejected status.
+          type: string
+          enum: [pending, accepted]
         invitedBy:
           description: Null once the person who sent the invitation is deleted.
           $ref: '#/components/schemas/MediaListUser'
@@ -2395,7 +2419,34 @@ components:
       required:
         - user
         - role
+        - status
         - invitedBy
+        - createdAt
+    MediaListInvite:
+      description: A pending invite as seen by the invited user. Carries an item count but never the items themselves.
+      type: object
+      properties:
+        listId:
+          type: number
+        listName:
+          type: string
+        role:
+          type: string
+          enum: [write, read]
+        invitedBy:
+          description: Null once the person who sent the invitation is deleted.
+          $ref: '#/components/schemas/MediaListUser'
+        itemCount:
+          type: number
+        createdAt:
+          type: string
+          example: '2026-08-16T03:00:00.000Z'
+      required:
+        - listId
+        - listName
+        - role
+        - invitedBy
+        - itemCount
         - createdAt
   securitySchemes:
     cookieAuth:
@@ -8449,6 +8500,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MediaList'
+  /mediaLists/invites:
+    get:
+      summary: Get the current user's pending watchlist invites
+      description: Lists never appear here once accepted or rejected.
+      tags:
+        - medialists
+      responses:
+        '200':
+          description: Pending invites returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaListInvite'
   /mediaLists/{mediaListId}:
     get:
       summary: Get a single watchlist
@@ -8878,6 +8944,40 @@ paths:
       responses:
         '204':
           description: Access removed
+  /mediaLists/{mediaListId}/invite/accept:
+    post:
+      summary: Accept a pending watchlist invite
+      description: Reserved to the invited user, and only while the invite is still pending.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListCollaborator'
+  /mediaLists/{mediaListId}/invite/reject:
+    post:
+      summary: Reject a pending watchlist invite
+      description: Final. Deletes the invite outright; the owner must invite the user again to offer access.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Invite rejected
 security:
   - cookieAuth: []
   - apiKey: []

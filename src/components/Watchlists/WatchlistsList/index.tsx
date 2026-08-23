@@ -2,38 +2,79 @@ import Button from '@app/components/Common/Button';
 import Header from '@app/components/Common/Header';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
+import Slider from '@app/components/Slider';
 import AddMediaModal from '@app/components/Watchlists/AddMediaModal';
 import CreateEditWatchlistModal from '@app/components/Watchlists/CreateEditWatchlistModal';
 import DeleteWatchlistModal from '@app/components/Watchlists/DeleteWatchlistModal';
 import ShareWatchlistModal from '@app/components/Watchlists/ShareWatchlistModal';
+import WatchlistInviteCard from '@app/components/Watchlists/WatchlistInviteCard';
 import WatchlistShelf from '@app/components/Watchlists/WatchlistShelf';
 import WatchlistsEmptyState from '@app/components/Watchlists/WatchlistsEmptyState';
-import { useMediaLists } from '@app/domain/mediaLists/hooks/useMediaLists';
+import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
+import {
+  useMediaLists,
+  useWatchlistInvites,
+} from '@app/domain/mediaLists/hooks/useMediaLists';
 import type { MediaListSummary } from '@app/domain/mediaLists/models/MediaList';
 import { canDeleteList } from '@app/domain/mediaLists/models/MediaList';
 import useRetainedValue from '@app/hooks/useRetainedValue';
+import useToasts from '@app/hooks/useToasts';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { BarsArrowDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistsList', {
   watchlists: 'Watchlists',
+  invites: 'Invites',
   mylists: 'My Lists',
   sharedwithme: 'Shared with Me',
   newwatchlist: 'New Watchlist',
+  sortlastmodified: 'Last Modified',
+  sorttitle: 'Title',
+  sortcreated: 'Created',
+  accepted: 'Joined the watchlist.',
+  acceptfailed: 'Something went wrong accepting the invite.',
+  rejected: 'Invite declined.',
+  rejectfailed: 'Something went wrong declining the invite.',
 });
+
+type SortOption = 'updated' | 'title' | 'created';
+
+const sortLists = (
+  lists: MediaListSummary[],
+  sortBy: SortOption
+): MediaListSummary[] =>
+  [...lists].sort((a, b) => {
+    switch (sortBy) {
+      case 'title':
+        return a.name.localeCompare(b.name);
+      case 'created':
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      case 'updated':
+      default:
+        return b.updatedAt.getTime() - a.updatedAt.getTime();
+    }
+  });
 
 const WatchlistsList = () => {
   const intl = useIntl();
+  const { addToast } = useToasts();
   const { data, error, isLoading } = useMediaLists();
+  const { data: invites } = useWatchlistInvites();
+  const { acceptInvite, rejectInvite } = useMediaListMutations();
 
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<MediaListSummary | undefined>();
   const [deleting, setDeleting] = useState<MediaListSummary | undefined>();
   const [adding, setAdding] = useState<MediaListSummary | undefined>();
   const [sharing, setSharing] = useState<MediaListSummary | undefined>();
+  const [sortBy, setSortBy] = useState<SortOption>('updated');
+  const [busyInvite, setBusyInvite] = useState<{
+    listId: number;
+    action: 'accept' | 'reject';
+  } | null>(null);
 
   // Each modal outlives the state that closed it by the length of its leave transition.
   const editingList = useRetainedValue(editing);
@@ -43,11 +84,50 @@ const WatchlistsList = () => {
 
   const { owned, shared } = useMemo(
     () => ({
-      owned: data?.filter((list) => list.role === 'owner') ?? [],
+      owned: sortLists(
+        data?.filter((list) => list.role === 'owner') ?? [],
+        sortBy
+      ),
       shared: data?.filter((list) => list.role !== 'owner') ?? [],
     }),
-    [data]
+    [data, sortBy]
   );
+
+  const onAcceptInvite = async (listId: number) => {
+    setBusyInvite({ listId, action: 'accept' });
+    try {
+      await acceptInvite(listId);
+      addToast(intl.formatMessage(messages.accepted), {
+        appearance: 'success',
+        autoDismiss: true,
+      });
+    } catch {
+      addToast(intl.formatMessage(messages.acceptfailed), {
+        appearance: 'error',
+        autoDismiss: true,
+      });
+    } finally {
+      setBusyInvite(null);
+    }
+  };
+
+  const onRejectInvite = async (listId: number) => {
+    setBusyInvite({ listId, action: 'reject' });
+    try {
+      await rejectInvite(listId);
+      addToast(intl.formatMessage(messages.rejected), {
+        appearance: 'success',
+        autoDismiss: true,
+      });
+    } catch {
+      addToast(intl.formatMessage(messages.rejectfailed), {
+        appearance: 'error',
+        autoDismiss: true,
+      });
+    } finally {
+      setBusyInvite(null);
+    }
+  };
 
   if (error) {
     return <Error statusCode={500} />;
@@ -79,15 +159,66 @@ const WatchlistsList = () => {
         )}
       </div>
 
+      {invites && invites.length > 0 && (
+        <section className="mb-6">
+          <h2 className="slider-title">
+            {intl.formatMessage(messages.invites)}
+          </h2>
+          <div className="mt-2">
+            <Slider
+              sliderKey="watchlist-invites"
+              isLoading={false}
+              items={invites.map((invite) => (
+                <WatchlistInviteCard
+                  key={invite.listId}
+                  invite={invite}
+                  busy={
+                    busyInvite?.listId === invite.listId
+                      ? busyInvite.action
+                      : null
+                  }
+                  onAccept={() => onAcceptInvite(invite.listId)}
+                  onReject={() => onRejectInvite(invite.listId)}
+                />
+              ))}
+            />
+          </div>
+        </section>
+      )}
+
       {isEmpty ? (
         <WatchlistsEmptyState onCreate={() => setShowCreate(true)} />
       ) : (
         <div className="flex flex-col gap-6">
           {owned.length > 0 && (
             <section>
-              <h2 className="slider-title">
-                {intl.formatMessage(messages.mylists)}
-              </h2>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <h2 className="slider-title">
+                  {intl.formatMessage(messages.mylists)}
+                </h2>
+                <div className="flex">
+                  <span className="inline-flex cursor-default items-center rounded-l-md border border-r-0 border-gray-500 bg-gray-800 px-3 text-gray-100 sm:text-sm">
+                    <BarsArrowDownIcon className="h-5 w-5" />
+                  </span>
+                  <select
+                    id="mediaListSortBy"
+                    name="mediaListSortBy"
+                    className="rounded-r-only short"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  >
+                    <option value="updated">
+                      {intl.formatMessage(messages.sortlastmodified)}
+                    </option>
+                    <option value="title">
+                      {intl.formatMessage(messages.sorttitle)}
+                    </option>
+                    <option value="created">
+                      {intl.formatMessage(messages.sortcreated)}
+                    </option>
+                  </select>
+                </div>
+              </div>
               <div className="mt-2">
                 {owned.map((list) => (
                   <WatchlistShelf
@@ -160,6 +291,7 @@ const WatchlistsList = () => {
         <AddMediaModal
           show={!!adding}
           mediaListId={addingList.id}
+          mediaListName={addingList.name}
           onComplete={() => setAdding(undefined)}
           onCancel={() => setAdding(undefined)}
         />
