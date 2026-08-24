@@ -1,6 +1,10 @@
 import { MediaType } from '@server/constants/media';
 import type { MediaList } from '@server/features/mediaLists/domain/entities/MediaList';
 import type { MediaListItem } from '@server/features/mediaLists/domain/entities/MediaListItem';
+import type {
+  MediaSummary,
+  MediaSummaryProvider,
+} from '@server/features/mediaLists/domain/ports/MediaSummaryProvider';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type { MediaListItemRepository } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
@@ -23,6 +27,8 @@ export type MediaListItemFilter = 'all' | 'unseen' | 'inprogress' | 'seen';
 
 export interface MediaListItemView {
   item: MediaListItem;
+  // Title, art and year from TMDB. Null when TMDB no longer knows the title.
+  summary: MediaSummary | null;
   // The requesting member's own state.
   watched: boolean;
   progress: ShowProgress | null;
@@ -30,15 +36,24 @@ export interface MediaListItemView {
   seenByUserIds: number[];
 }
 
+export interface MediaListPreviewItem {
+  tmdbId: number;
+  mediaType: MediaListItem['mediaType'];
+  // Null when TMDB has no art, or no longer knows the title.
+  posterPath: string | null;
+}
+
 export interface MediaListSummary {
   list: MediaList;
   membership: MediaListMembership;
   itemCount: number;
   seenCount: number;
-  previewItems: MediaListItem[];
+  previewItems: MediaListPreviewItem[];
 }
 
-const PREVIEW_ITEM_COUNT = 4;
+// Enough to fill the poster strip on a shelf row without turning the index into a long
+// run of TMDB lookups.
+const PREVIEW_ITEM_COUNT = 7;
 
 // Assembles what the list and detail screens read. Kept apart from the services that
 // change things, because the rules for reading are only ever "who is allowed to look"
@@ -52,7 +67,8 @@ export class MediaListViewService {
     private readonly listService: MediaListService,
     private readonly access: MediaListAccessPolicy,
     private readonly tv: TvMetadataProvider,
-    private readonly progress: MediaListProgressCalculator
+    private readonly progress: MediaListProgressCalculator,
+    private readonly summaries: MediaSummaryProvider
   ) {}
 
   public async summariesFor(userId: number): Promise<MediaListSummary[]> {
@@ -65,14 +81,19 @@ export class MediaListViewService {
           this.listService.membershipFor(list, userId),
         ]);
 
-        const views = await this.buildViews(items, userId);
+        const views = await this.buildViews(items, userId, {
+          withSummaries: false,
+          allSeasonCounts: false,
+        });
 
         return {
           list,
           membership,
           itemCount: items.length,
           seenCount: views.filter((view) => view.watched).length,
-          previewItems: items.slice(0, PREVIEW_ITEM_COUNT),
+          previewItems: await this.buildPreview(
+            items.slice(0, PREVIEW_ITEM_COUNT)
+          ),
         };
       })
     );
@@ -90,7 +111,10 @@ export class MediaListViewService {
     );
 
     const items = await this.items.findByList(listId);
-    const views = await this.buildViews(items, userId);
+    const views = await this.buildViews(items, userId, {
+      withSummaries: true,
+      allSeasonCounts: true,
+    });
 
     return views.filter((view) => this.matchesFilter(view, filter));
   }
@@ -118,7 +142,8 @@ export class MediaListViewService {
 
   private async buildViews(
     items: MediaListItem[],
-    userId: number
+    userId: number,
+    options: { withSummaries: boolean; allSeasonCounts: boolean }
   ): Promise<MediaListItemView[]> {
     if (items.length === 0) {
       return [];
@@ -141,16 +166,26 @@ export class MediaListViewService {
 
     // Only shows somebody has actually started need their episode counts, which keeps a
     // list of untouched series from turning into a TMDB call each.
-    const seasonCounts = await this.loadSeasonCounts(items, episodesByItem);
+    const seasonCounts = await this.loadSeasonCounts(
+      items,
+      episodesByItem,
+      options.allSeasonCounts
+    );
+    const summaries = options.withSummaries
+      ? await this.loadSummaries(items)
+      : new Map<number, MediaSummary | null>();
 
     return items.map((item) => {
       const watchers = moviesByItem.get(item.id) ?? new Set<number>();
       const byUser =
         episodesByItem.get(item.id) ?? new Map<number, EpisodeRef[]>();
 
+      const summary = summaries.get(item.id) ?? null;
+
       if (item.mediaType === MediaType.MOVIE) {
         return {
           item,
+          summary,
           watched: watchers.has(userId),
           progress: null,
           seenByUserIds: [...watchers],
@@ -169,6 +204,7 @@ export class MediaListViewService {
 
       return {
         item,
+        summary,
         watched: progress.isComplete,
         progress,
         seenByUserIds,
@@ -195,14 +231,48 @@ export class MediaListViewService {
     return byItem;
   }
 
+  private async buildPreview(
+    items: MediaListItem[]
+  ): Promise<MediaListPreviewItem[]> {
+    return Promise.all(
+      items.map(async (item) => ({
+        tmdbId: item.tmdbId,
+        mediaType: item.mediaType,
+        posterPath:
+          (await this.summaries.getSummary(item.tmdbId, item.mediaType))
+            ?.posterPath ?? null,
+      }))
+    );
+  }
+
+  private async loadSummaries(items: MediaListItem[]) {
+    const entries = await Promise.all(
+      items.map(
+        async (item) =>
+          [
+            item.id,
+            await this.summaries.getSummary(item.tmdbId, item.mediaType),
+          ] as const
+      )
+    );
+
+    return new Map(entries);
+  }
+
   private async loadSeasonCounts(
     items: MediaListItem[],
-    episodesByItem: Map<number, Map<number, EpisodeRef[]>>
+    episodesByItem: Map<number, Map<number, EpisodeRef[]>>,
+    includeUnstarted: boolean
   ) {
-    const started = items.filter(
-      (item) => item.mediaType === MediaType.TV && episodesByItem.has(item.id)
+    // A series nobody has started cannot be complete, so the index skips its episode
+    // counts entirely. The detail page asks for all of them, because a progress ring
+    // reading 0/0 instead of 0/20 is worse than the extra cached lookup.
+    const wanted = items.filter(
+      (item) =>
+        item.mediaType === MediaType.TV &&
+        (includeUnstarted || episodesByItem.has(item.id))
     );
-    const tmdbIds = [...new Set(started.map((item) => item.tmdbId))];
+    const tmdbIds = [...new Set(wanted.map((item) => item.tmdbId))];
 
     const entries = await Promise.all(
       tmdbIds.map(

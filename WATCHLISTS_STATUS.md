@@ -15,8 +15,8 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 3 | Data adapters: TypeORM repositories, mappers (+round-trip tests), `TmdbTvMetadataProvider`, `NotificationGatewayImpl`, composition point | ✅ |
 | 4 | Backend presentation: wire types, Zod schemas, routes, mount, supertest tests | ✅ |
 | 5 | Frontend domain + data: models, `dto.ts`, `mediaListsApi.ts`, mappers, SWR hooks | ✅ |
-| 6 | List CRUD UI: both nav entries, `WatchlistsList`, `WatchlistCard`, create/edit/delete modals, empty state (1a/1b/1g/1k) | ☐ |
-| 7 | Items + movies: `WatchlistDetail`, `AddMediaModal`, item card/row, filters, grid/rows toggle, `RequestButton`, drag-reorder (1c/1d/1j) | ☐ |
+| 6 | List CRUD UI: both nav entries, shelves index, create/edit/delete modals, empty state (1b/1g/1k) | ✅ |
+| 7 | Items + movies: `WatchlistDetail` poster grid, `AddMediaModal`, item card, filters, `RequestButton` (1c/1j). Drag-reorder still deferred | ✅ |
 | 8 | Episode tracking: `WatchlistEpisodeTracker`, season rail, episode checklist, per-episode avatars (1e/1f) | ☐ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types + `NotificationTypeSelector` (1h/1i) | ☐ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ☐ |
@@ -100,6 +100,18 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   domain model and mirror the server access policy. They gate the UI only; every mutation is checked
   again server-side.
 
+- **2026-08-15** — Reversed the earlier call that artwork is the client's job. Choosing the
+  shelves index put poster strips on the list page, and resolving them in the browser would
+  be one request per poster. `previewItems` now carries `posterPath`, resolved server-side
+  through the same cached TMDB provider: identical TMDB cost, one response, shared cache.
+  Preview is capped at seven, and a title with no art leaves a gap rather than failing.
+- **2026-08-15** — Design directions chosen: 1b sectioned shelves for the index, 1c poster
+  grid for the detail, 1e inline accordion for episodes, 1h per-row role dropdown for share.
+
+- **2026-08-15** — `MediaArtworkProvider` became `MediaSummaryProvider`, returning title, poster
+  and year together. The detail grid needs all three, and one TMDB call per title serves both
+  the index strip and the grid.
+
 ## Milestone 1 verification (2026-08-14)
 
 - `pnpm test` — 162 passed, 0 failed, including 9 new persistence tests. No regressions.
@@ -110,6 +122,37 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   removes all 5 tables and 12 indexes cleanly.
 - `pnpm build:server` emits all 5 Records to `dist/features/mediaLists/data/orm/`, and exactly 5 files
   match the production glob.
+
+## Milestone 7 verification (2026-08-15)
+
+- `pnpm test` 367 passed, typecheck and lint clean, both routes registered by `next build`.
+- Checked in a browser against the built app with real TMDB data: the grid renders posters,
+  years, media badges, the seen toggle, the reused Request button and the seen-by avatars.
+- Two problems the browser caught that tests did not. A series nobody had started showed a
+  `0/0` progress ring, because the index optimisation that skips episode counts for unstarted
+  series also applied to the detail page. Reading now splits by screen: the index resolves
+  titles only for the seven preview items and skips unstarted series, while the detail page
+  resolves every title and every episode total. Both are pinned by tests that count the
+  lookups. The remove control was also a full sentence under each poster; it is a quiet
+  "Remove" with the sentence kept as the accessible label.
+- **Drag-reorder is still not built.** The reorder endpoint and its tests exist from
+  milestone 4, but no frame shows a drag affordance, so the interaction still needs a design
+  pass. Episode tracking is milestone 8, so the Episodes button currently explains that.
+
+## Milestone 6 verification (2026-08-15)
+
+- `pnpm test` 364 passed. Typecheck (both projects), lint and formatting clean. `next build`
+  registers `/watchlists`.
+- **Confirmed in a browser against the built app**, which is the only way several of these
+  would have surfaced. The shelves render per frame 1b, the edit modal per 1g with the
+  owner-only Delete, and editing a list updates its shelf live through the mutation hook.
+- Two things only running it caught: `pnpm start` serves `dist/`, so the API 404s until
+  `pnpm build:server` runs, and a seeded database made with `synchronize` cannot boot in
+  production mode. Re-seed with `WITH_MIGRATIONS=true pnpm cypress:prepare`, which also
+  exercises the sqlite migration in the real boot path.
+- A new `MediaListViewService` unit test caught a flaw in the test double rather than the
+  code: the fake repository's `findAccessibleTo` returned only owned lists, so it silently
+  under-reported shared ones. The real implementation was always correct.
 
 ## Milestone 5 verification (2026-08-15)
 

@@ -3,12 +3,14 @@
 // 'Watchlist'/'/api/v1/watchlist' was already taken by the older, unrelated Plex-synced
 // auto-request feature — see server/entity/Watchlist.ts.
 import { NotificationGatewayImpl } from '@server/features/mediaLists/data/providers/NotificationGatewayImpl';
+import { TmdbMediaSummaryProvider } from '@server/features/mediaLists/data/providers/TmdbMediaSummaryProvider';
 import { TmdbTvMetadataProvider } from '@server/features/mediaLists/data/providers/TmdbTvMetadataProvider';
 import { TypeOrmMediaListCollaboratorRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListCollaboratorRepository';
 import { TypeOrmMediaListItemRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListItemRepository';
 import { TypeOrmMediaListRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListRepository';
 import { TypeOrmMediaListWatchRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListWatchRepository';
 import { TypeOrmUserDirectory } from '@server/features/mediaLists/data/repositories/TypeOrmUserDirectory';
+import type { MediaSummaryProvider } from '@server/features/mediaLists/domain/ports/MediaSummaryProvider';
 import type { NotificationGateway } from '@server/features/mediaLists/domain/ports/NotificationGateway';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import { MediaListAccessPolicy } from '@server/features/mediaLists/domain/services/MediaListAccessPolicy';
@@ -33,6 +35,7 @@ export interface MediaListServices {
 export interface MediaListPortOverrides {
   tv?: TvMetadataProvider;
   notifications?: NotificationGateway;
+  summaries?: MediaSummaryProvider;
 }
 
 // The single place the domain meets its adapters. Routes import this rather than
@@ -49,6 +52,7 @@ export const buildMediaListServices = (
   const tv = overrides.tv ?? new TmdbTvMetadataProvider();
   const notifications =
     overrides.notifications ?? new NotificationGatewayImpl();
+  const summaries = overrides.summaries ?? new TmdbMediaSummaryProvider();
 
   const access = new MediaListAccessPolicy();
   const progress = new MediaListProgressCalculator();
@@ -70,7 +74,8 @@ export const buildMediaListServices = (
       lists,
       access,
       tv,
-      progress
+      progress,
+      summaries
     ),
     items: new MediaListItemService(
       itemRepository,

@@ -45,6 +45,7 @@ export const toMediaListSummary = (
   previewItems: dto.previewItems.map((item) => ({
     tmdbId: item.tmdbId,
     mediaType: item.mediaType,
+    posterPath: item.posterPath,
   })),
 });
 
@@ -53,6 +54,9 @@ export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
   listId: dto.listId,
   tmdbId: dto.tmdbId,
   mediaType: dto.mediaType,
+  title: dto.title,
+  posterPath: dto.posterPath,
+  year: dto.year,
   position: dto.position,
   addedBy: toOptionalUser(dto.addedBy),
   createdAt: new Date(dto.createdAt),

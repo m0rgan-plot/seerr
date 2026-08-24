@@ -3,6 +3,7 @@ import { MediaListCollaboratorService } from '@server/features/mediaLists/domain
 import { MediaListItemService } from '@server/features/mediaLists/domain/services/MediaListItemService';
 import { MediaListProgressCalculator } from '@server/features/mediaLists/domain/services/MediaListProgressCalculator';
 import { MediaListService } from '@server/features/mediaLists/domain/services/MediaListService';
+import { MediaListViewService } from '@server/features/mediaLists/domain/services/MediaListViewService';
 import { MediaListWatchService } from '@server/features/mediaLists/domain/services/MediaListWatchService';
 import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
@@ -21,15 +22,18 @@ export const WRITER = user(2, 'writer');
 export const READER = user(3, 'reader');
 export const STRANGER = user(4, 'stranger');
 
+// A title TMDB has no art for.
+export const MISSING_ARTWORK_TMDB_ID = 4040;
+
 // Wires the real services against in-memory doubles. No database, no Express, no TMDB.
 export const buildHarness = () => {
   const users = new Map<number, UserRef>(
     [OWNER, WRITER, READER, STRANGER].map((entry) => [entry.id, entry])
   );
 
-  const lists = new FakeMediaListRepository(users);
-  const items = new FakeMediaListItemRepository(users);
   const collaborators = new FakeMediaListCollaboratorRepository(users);
+  const lists = new FakeMediaListRepository(users, collaborators);
+  const items = new FakeMediaListItemRepository(users);
   const watches = new FakeMediaListWatchRepository();
   const tv = new FakeTvMetadataProvider();
   const notifications = new FakeNotificationGateway();
@@ -52,6 +56,33 @@ export const buildHarness = () => {
     tv,
     progress
   );
+  // Returns predictable values so a test can tell a resolved title from a missing one.
+  const summaryCalls: number[] = [];
+  const summaries = {
+    getSummary: async (tmdbId: number) => (
+      summaryCalls.push(tmdbId),
+      tmdbId === MISSING_ARTWORK_TMDB_ID
+        ? null
+        : {
+            title: `Title ${tmdbId}`,
+            posterPath: `/poster-${tmdbId}.jpg`,
+            year: 2026,
+          }
+    ),
+  };
+
+  const viewService = new MediaListViewService(
+    lists,
+    items,
+    watches,
+    collaborators,
+    listService,
+    access,
+    tv,
+    progress,
+    summaries
+  );
+
   const userDirectory = {
     findById: async (userId: number) => users.get(userId) ?? null,
   };
@@ -88,6 +119,9 @@ export const buildHarness = () => {
   return {
     lists,
     items,
+    viewService,
+    summaries,
+    summaryCalls,
     collaborators,
     watches,
     tv,
