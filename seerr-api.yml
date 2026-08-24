@@ -2197,6 +2197,13 @@ components:
             addedBy:
               description: Null once the person who added the title is deleted.
               $ref: '#/components/schemas/MediaListUser'
+            pinnedAt:
+              description: >-
+                When the title was pinned. Null when it isn't. Pinned titles lead the
+                strip ahead of anything unpinned, most recently pinned first.
+              type: string
+              nullable: true
+              example: null
           required:
             - id
             - title
@@ -2205,6 +2212,7 @@ components:
             - status
             - createdAt
             - addedBy
+            - pinnedAt
     MediaListSeasonProgress:
       type: object
       properties:
@@ -2352,6 +2360,13 @@ components:
           # here rather than declared. Responses do send null.
           description: Null once the person who added the title is deleted.
           $ref: '#/components/schemas/MediaListUser'
+        pinnedAt:
+          description: >-
+            When the title was pinned. Null when it isn't. Non-null sorts it to the top
+            of the list ahead of position, most recently pinned first.
+          type: string
+          nullable: true
+          example: null
         createdAt:
           type: string
           example: '2026-08-15T03:00:00.000Z'
@@ -2382,6 +2397,7 @@ components:
         - position
         - status
         - addedBy
+        - pinnedAt
         - createdAt
         - updatedAt
         - watched
@@ -8724,6 +8740,46 @@ paths:
       responses:
         '204':
           description: Title removed
+  /mediaLists/{mediaListId}/items/{itemId}/pinned:
+    post:
+      summary: Pin a title to the top of a watchlist
+      description: >-
+        Requires write access to the list, the same as adding or removing a title.
+        Pinning again refreshes the pin so it stays ahead of one pinned earlier.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Title pinned
+    delete:
+      summary: Unpin a title
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Title unpinned
   /mediaLists/{mediaListId}/items/{itemId}/watched:
     post:
       summary: Mark a movie as seen by the current user

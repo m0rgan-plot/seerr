@@ -78,6 +78,15 @@ export const reorderMediaListItems = async (
   });
 };
 
+export const setPinned = async (
+  mediaListId: number,
+  itemId: number,
+  pinned: boolean
+): Promise<void> => {
+  const url = `${itemKey(mediaListId, itemId)}/pinned`;
+  await (pinned ? axios.post(url) : axios.delete(url));
+};
+
 export const setMovieWatched = async (
   mediaListId: number,
   itemId: number,

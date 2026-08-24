@@ -52,6 +52,7 @@ export interface MediaListPreviewItem {
   status: MediaListItem['status'];
   createdAt: Date;
   addedBy: UserRef | null;
+  pinnedAt: Date | null;
 }
 
 export interface MediaListSummary {
@@ -122,9 +123,18 @@ export class MediaListViewService {
         // was never built (see WATCHLISTS_STATUS.md), so position is still exactly an
         // insertion counter today -- a more reliable "most recent" signal than a
         // timestamp column, which two adds in the same request could tie on.
-        const byRecency = [...views].sort(
-          (a, b) => b.item.position - a.item.position
-        );
+        //
+        // Pinned titles lead the strip the same way they lead the detail page, most
+        // recently pinned first, ahead of every unpinned title regardless of recency.
+        const pinned = views
+          .filter((view) => view.item.pinnedAt !== null)
+          .sort(
+            (a, b) => b.item.pinnedAt!.getTime() - a.item.pinnedAt!.getTime()
+          );
+        const unpinned = views
+          .filter((view) => view.item.pinnedAt === null)
+          .sort((a, b) => b.item.position - a.item.position);
+        const byRecency = [...pinned, ...unpinned];
 
         return {
           list,
@@ -344,6 +354,7 @@ export class MediaListViewService {
           posterPath: summary?.posterPath ?? null,
           createdAt: view.item.createdAt,
           addedBy: view.item.addedBy,
+          pinnedAt: view.item.pinnedAt,
         };
       })
     );

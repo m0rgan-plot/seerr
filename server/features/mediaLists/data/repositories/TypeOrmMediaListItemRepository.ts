@@ -23,13 +23,22 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
   }
 
   public async findByList(listId: number): Promise<MediaListItem[]> {
-    const records = await getRepository(MediaListItemRecord).find({
-      where: { list: { id: listId } },
+    // Pinned items lead regardless of position, most recently pinned first; everything
+    // else keeps the manual order. NULLS ordering isn't consistent across sqlite and
+    // postgres, so the pinned/unpinned split is spelled out as a CASE instead of relying
+    // on driver defaults for where a null pinnedAt sorts.
+    const records = await getRepository(MediaListItemRecord)
+      .createQueryBuilder('item')
       // The media row carries the library status the cards need, and it is a join on a
       // query that already runs rather than a lookup per title.
-      relations: { addedBy: true, media: true },
-      order: { position: 'ASC', id: 'ASC' },
-    });
+      .leftJoinAndSelect('item.addedBy', 'addedBy')
+      .leftJoinAndSelect('item.media', 'media')
+      .where('item.listId = :listId', { listId })
+      .orderBy('CASE WHEN item.pinnedAt IS NULL THEN 1 ELSE 0 END', 'ASC')
+      .addOrderBy('item.pinnedAt', 'DESC')
+      .addOrderBy('item.position', 'ASC')
+      .addOrderBy('item.id', 'ASC')
+      .getMany();
     return records.map((record) => toMediaListItem(record, listId));
   }
 
@@ -115,6 +124,18 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
       .getRawMany<{ listId: number; itemId: number }>();
 
     return rows;
+  }
+
+  public async pin(itemId: number): Promise<void> {
+    await getRepository(MediaListItemRecord).update(itemId, {
+      pinnedAt: new Date(),
+    });
+  }
+
+  public async unpin(itemId: number): Promise<void> {
+    await getRepository(MediaListItemRecord).update(itemId, {
+      pinnedAt: null,
+    });
   }
 
   public async applyOrder(

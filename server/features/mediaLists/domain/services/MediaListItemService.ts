@@ -118,6 +118,30 @@ export class MediaListItemService {
     await this.listService.touch(listId);
   }
 
+  public async setPinned(
+    listId: number,
+    itemId: number,
+    userId: number,
+    pinned: boolean
+  ): Promise<void> {
+    const list = await this.listService.requireList(listId);
+    this.access.assertCan(
+      await this.listService.membershipFor(list, userId),
+      'editListItems'
+    );
+
+    const item = await this.items.findById(itemId);
+    if (!item || item.listId !== listId) {
+      throw new ItemNotFoundInListError();
+    }
+
+    if (pinned) {
+      await this.items.pin(itemId);
+    } else {
+      await this.items.unpin(itemId);
+    }
+  }
+
   public async reorder(
     listId: number,
     userId: number,

@@ -26,6 +26,9 @@ export interface MediaListRef {
   createdAt: Date;
   // Null once the person who added it is deleted. The item stays.
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Pinned titles lead the strip,
+  // most recently pinned first, ahead of anything unpinned.
+  pinnedAt: Date | null;
 }
 
 export interface MediaList {

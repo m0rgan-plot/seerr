@@ -163,6 +163,24 @@ describe('MediaListViewService', () => {
       );
     });
 
+    // Pinning is "show me this before anything else", so it overrides recency in the
+    // strip the same way it does on the detail page.
+    it('puts a pinned title ahead of more recently added ones in the preview', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+
+      await harness.itemService.setPinned(list.id, items[0].id, OWNER.id, true);
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => item.tmdbId),
+        [1, 3, 2]
+      );
+    });
+
     it('returns an empty preview for a list with nothing on it', async () => {
       const harness = buildHarness();
       await harness.seedSharedList();

@@ -60,6 +60,7 @@ export const toMediaListSummary = (
     status: item.status,
     createdAt: new Date(item.createdAt),
     addedBy: toOptionalUser(item.addedBy),
+    pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
   })),
 });
 
@@ -74,6 +75,7 @@ export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
   position: dto.position,
   status: dto.status,
   addedBy: toOptionalUser(dto.addedBy),
+  pinnedAt: dto.pinnedAt ? new Date(dto.pinnedAt) : null,
   createdAt: new Date(dto.createdAt),
   updatedAt: new Date(dto.updatedAt),
   watched: dto.watched,

@@ -30,6 +30,9 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   createdAt: string;
   // Null once the person who added it is deleted. The item stays.
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Non-null sorts it to the top of
+  // the strip ahead of anything unpinned, most recently pinned first.
+  pinnedAt: string | null;
 }
 
 export interface MediaListSeasonProgress {
@@ -82,6 +85,9 @@ export interface MediaListItem {
   // reports one already in flight. Separate from watched, which is per member.
   status: MediaStatus | null;
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Non-null sorts it to the top of
+  // the list ahead of `position`, most recently pinned first.
+  pinnedAt: string | null;
   createdAt: string;
   updatedAt: string;
   // The requesting member's own state. Null progress means the title is a movie.

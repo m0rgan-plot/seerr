@@ -20,6 +20,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ✅ |
+| 11 | Pin an item: `pinnedAt` column + migrations, domain/data/presentation backend, frontend domain + data layer. Presentation UI deferred to a `/design` pass | ✅ |
 
 ## Decisions log
 
@@ -381,3 +382,29 @@ to the array `summariesFor` already builds, no new query -- the owner is already
 self-exclusion now removes the owner entry instead of nothing, netting the same displayed avatars as
 before. Route and service tests updated/added for both endpoints; the Cypress case now checks the
 shelf row before the detail page in one test rather than two.
+
+## Pin an item to the top of a list (2026-08-24)
+
+Branch `feat/media-lists-pin`, off `feat/media-lists-collaboration-and-polish`. Backend and frontend
+domain/data layers only — no UI. Presentation goes through `/design` before it's implemented.
+
+- **Storage is a nullable `pinnedAt` timestamp on `media_list_item`**, not a boolean, so the same value
+  doubles as the tie-breaker when more than one item is pinned (pinning again refreshes it, which is
+  what keeps the most recently pinned item ahead of one pinned earlier). New sqlite/postgres migrations
+  (`AddMediaListItemPinnedAt`) match the `AddMediaListDeletedAt` pattern; verified by running the sqlite
+  migration chain end to end against a scratch db and inspecting `pinnedAt`'s resulting column info.
+- **Pin is list-level, not per-user**, unlike watched state: everyone with access sees the same pinned
+  titles in the same order. Gated by the existing `editListItems` permission (same as add/remove/reorder),
+  so the route lives in `mediaListItemRoutes.ts` as `POST`/`DELETE /items/:itemId/pinned`, not in
+  `mediaListWatchRoutes.ts`, which is deliberately reachable by read-only collaborators for their own
+  state.
+- **Ordering is pinned-first, most recently pinned first, then the existing manual `position` order**,
+  both on the detail page (`MediaListItemRepository.findByList`) and the shelf preview
+  (`MediaListViewService.summariesFor`'s recency sort). NULL ordering isn't consistent between sqlite and
+  postgres (DESC sorts NULLs first vs. last by driver default), so the repository query spells out
+  `CASE WHEN pinnedAt IS NULL THEN 1 ELSE 0 END` instead of relying on either driver's default.
+- **No notification and no list `touch()` on pin/unpin.** Reorder doesn't bump the list's `updatedAt`
+  either (see the "Index sort" fix above, which only covers add/remove), so pin follows that precedent
+  rather than add()'s.
+- Verification: full server suite (412 tests) green, `tsc`/`eslint`/`prettier` clean on both server and
+  client, sqlite migration chain runs clean from a scratch db.
