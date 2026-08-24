@@ -90,6 +90,14 @@ export class FakeMediaListRepository implements MediaListRepository {
   async delete(id: number): Promise<void> {
     this.lists = this.lists.filter((list) => list.id !== id);
   }
+
+  async touch(id: number): Promise<void> {
+    const list = this.lists.find((candidate) => candidate.id === id);
+    if (!list) {
+      throw new Error(`no list ${id}`);
+    }
+    list.updatedAt = new Date();
+  }
 }
 
 export class FakeMediaListItemRepository implements MediaListItemRepository {

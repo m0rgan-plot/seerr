@@ -77,4 +77,10 @@ export class MediaListService {
     this.access.assertCan(await this.membershipFor(list, userId), 'deleteList');
     await this.lists.delete(listId);
   }
+
+  // For callers that change a list's contents (items) rather than its own name or
+  // description, so "Last Modified" on the index reflects that too.
+  public async touch(listId: number): Promise<void> {
+    await this.lists.touch(listId);
+  }
 }

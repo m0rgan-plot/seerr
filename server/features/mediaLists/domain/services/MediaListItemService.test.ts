@@ -47,6 +47,21 @@ describe('MediaListItemService', () => {
     );
   });
 
+  it('bumps the list updatedAt so the index can sort by last modified', async () => {
+    const harness = buildHarness();
+    const list = await harness.seedSharedList();
+    const before = list.updatedAt.getTime();
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const item = await addMovie(harness, list.id, 1);
+    assert.ok(list.updatedAt.getTime() > before);
+
+    const afterAdd = list.updatedAt.getTime();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await harness.itemService.remove(list.id, item.id, OWNER.id);
+    assert.ok(list.updatedAt.getTime() > afterAdd);
+  });
+
   it('records who added the item', async () => {
     const harness = buildHarness();
     const list = await harness.seedSharedList();

@@ -60,6 +60,7 @@ export class MediaListItemService {
       mediaType: input.mediaType,
       addedById: input.actor.id,
     });
+    await this.listService.touch(input.listId);
 
     // Everyone with access hears about it except whoever added it.
     const collaborators = await this.collaborators.findByList(input.listId);
@@ -97,6 +98,7 @@ export class MediaListItemService {
     }
 
     await this.items.remove(itemId);
+    await this.listService.touch(listId);
   }
 
   public async reorder(
