@@ -2,6 +2,7 @@ import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import Avatar from '@app/components/Watchlists/Avatar';
 import RemoveWatchlistItemModal from '@app/components/Watchlists/RemoveWatchlistItemModal';
+import WatchlistPinToggle from '@app/components/Watchlists/WatchlistPinToggle';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
 import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
@@ -28,6 +29,7 @@ const messages = defineMessages('components.Watchlists.WatchlistPosterStrip', {
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
   seenfailed: 'Something went wrong updating your watched state.',
+  pinfailed: 'Something went wrong updating that pin.',
 });
 
 interface WatchlistPosterStripProps {
@@ -50,7 +52,8 @@ const WatchlistPosterStrip = ({
   const isTouch = useIsTouch();
   const { user } = useUser();
   const { addToast } = useToasts();
-  const { setMovieWatched, removeItem } = useMediaListMutations(listId);
+  const { setMovieWatched, setPinned, removeItem } =
+    useMediaListMutations(listId);
   const [removing, setRemoving] = useState<MediaListRef | null>(null);
   // Touch has no hover, so a tap stands in for it: the first tap on a poster reveals
   // its actions instead of navigating, and a second tap (or a tap elsewhere) proceeds
@@ -69,6 +72,17 @@ const WatchlistPosterStrip = ({
       await setMovieWatched(item.id, !item.watched);
     } catch {
       addToast(intl.formatMessage(messages.seenfailed), {
+        appearance: 'error',
+        autoDismiss: true,
+      });
+    }
+  };
+
+  const onTogglePinned = async (item: MediaListRef) => {
+    try {
+      await setPinned(item.id, item.pinnedAt === null);
+    } catch {
+      addToast(intl.formatMessage(messages.pinfailed), {
         appearance: 'error',
         autoDismiss: true,
       });
@@ -148,17 +162,53 @@ const WatchlistPosterStrip = ({
               )}
             </Link>
 
-            {/* Watched is the member's own state, so it stays visible rather than
-                waiting for a hover or tap the way the actions do, matching the
-                detail grid's card. */}
-            {item.watched && (
-              <div
-                data-testid="watchlist-strip-item-seen"
-                className="pointer-events-none absolute right-1.5 top-1.5 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
-              >
-                <CheckIcon className="h-3 w-3" />
-              </div>
-            )}
+            <div className="absolute left-1.5 right-1.5 top-1.5 z-30 flex items-start justify-between">
+              {canAdd ? (
+                <WatchlistPinToggle
+                  pinned={item.pinnedAt !== null}
+                  revealed={tapped}
+                  revealOnGroupHover={!isTouch}
+                  onToggle={() => onTogglePinned(item)}
+                  size="strip"
+                />
+              ) : (
+                <span />
+              )}
+
+              {/* A series has no single-tap toggle (it tracks per episode via the
+                  detail page's episode tracker), so completion stays a quiet,
+                  non-interactive readout here, exactly as before. A movie's watched
+                  picto doubles as its own toggle, the same way the pin picto does. */}
+              {item.mediaType === 'tv' ? (
+                item.watched && (
+                  <div
+                    data-testid="watchlist-strip-item-seen"
+                    className="pointer-events-none flex h-[17px] w-[17px] flex-none items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
+                  >
+                    <CheckIcon className="h-2.5 w-2.5" />
+                  </div>
+                )
+              ) : (
+                <button
+                  type="button"
+                  data-testid="watchlist-strip-item-seen-toggle"
+                  aria-pressed={item.watched}
+                  onClick={() => onToggleSeen(item)}
+                  title={intl.formatMessage(
+                    item.watched ? messages.markunseen : messages.markseen
+                  )}
+                  className={`pointer-events-auto flex h-[17px] w-[17px] flex-none items-center justify-center rounded-full border shadow-md transition duration-150 ${
+                    item.watched
+                      ? 'border-green-400 bg-green-500/90 text-green-50'
+                      : `border-gray-500 bg-gray-900/60 text-gray-300 hover:border-white hover:text-white ${
+                          tapped ? 'opacity-100' : 'opacity-0'
+                        } ${!isTouch ? 'group-hover:opacity-100' : ''}`
+                  }`}
+                >
+                  <CheckIcon className="h-2.5 w-2.5" />
+                </button>
+              )}
+            </div>
 
             {/* A quiet stand-in for the status chip below, which only shows once the
                 actions do: on hover for a mouse, on tap for touch. */}
@@ -186,7 +236,9 @@ const WatchlistPosterStrip = ({
                   : 'bg-opacity-0 opacity-0 group-hover:bg-opacity-70 group-hover:opacity-100'
               }`}
             >
-              <div className="flex items-start justify-between gap-1">
+              {/* mt-5 clears the pin/watched chip row, which sits in its own
+                  always-mounted overlay at the same top-left corner. */}
+              <div className="mt-5 flex items-start justify-between gap-1">
                 <div
                   className="min-w-0 text-[10px] leading-tight text-gray-300"
                   title={
@@ -213,44 +265,23 @@ const WatchlistPosterStrip = ({
                     />
                   )}
                 </div>
-
-                {canAdd && (
-                  <div className="pointer-events-auto flex flex-none gap-1">
-                    {/* A series tracks per episode, not as a single title, and the
-                        strip has no season data to mark them all from -- that lives
-                        behind the episode tracker on the detail page instead. */}
-                    {item.mediaType !== 'tv' && (
-                      <Button
-                        buttonType="ghost"
-                        buttonSize="sm"
-                        onClick={() => onToggleSeen(item)}
-                        title={intl.formatMessage(
-                          item.watched ? messages.markunseen : messages.markseen
-                        )}
-                      >
-                        <CheckIcon />
-                      </Button>
-                    )}
-
-                    <Button
-                      buttonType="danger"
-                      buttonSize="sm"
-                      onClick={() => setRemoving(item)}
-                      title={intl.formatMessage(messages.remove)}
-                    >
-                      <TrashIcon />
-                    </Button>
-                  </div>
-                )}
               </div>
 
               {canAdd && (
-                <div className="pointer-events-auto flex justify-center">
+                <div className="pointer-events-auto flex gap-1">
+                  <Button
+                    buttonType="danger"
+                    buttonSize="sm"
+                    onClick={() => setRemoving(item)}
+                    title={intl.formatMessage(messages.remove)}
+                  >
+                    <TrashIcon />
+                  </Button>
                   <WatchlistRequestButton
                     tmdbId={item.tmdbId}
                     mediaType={item.mediaType}
                     status={item.status}
-                    className="w-full"
+                    className="flex-1"
                   />
                 </div>
               )}

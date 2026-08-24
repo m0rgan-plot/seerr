@@ -21,6 +21,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ✅ |
 | 11 | Pin an item: `pinnedAt` column + migrations, domain/data/presentation backend, frontend domain + data layer. Presentation UI deferred to a `/design` pass | ✅ |
+| 12 | Pin presentation UI: `WatchlistPinToggle`, merged pin/watched badge+button into one toggle picto on both the grid card and the poster strip, Remove relocated to the bottom action bar, Cypress coverage | ✅ |
 
 ## Decisions log
 
@@ -408,3 +409,48 @@ domain/data layers only — no UI. Presentation goes through `/design` before it
   rather than add()'s.
 - Verification: full server suite (412 tests) green, `tsc`/`eslint`/`prettier` clean on both server and
   client, sqlite migration chain runs clean from a scratch db.
+
+## Pin presentation UI (2026-08-24)
+
+Explored the pin badge with `/design` first (three directions: badge, corner ribbon, bare icon on
+poster — see the published mockup). Mid-review the user caught a real problem in that first pass: the
+pin badge and the pin action button were two separate elements showing the same picto at once once an
+item was both pinned and hovered, and the existing "watched" badge/button had the identical duplication
+already living in the shipped code. Asked to fix both together and reorganize where Remove goes.
+
+- **One picto per state, and it doubles as the toggle**, everywhere pin or watched appears: filled and
+  always visible once true (so a pinned or watched title is still recognizable without hovering
+  anything — that requirement is why the plain badge couldn't just become hover-only), a quiet gray
+  outline of the same glyph that only appears on reveal otherwise, no second button anywhere restating
+  it. New `WatchlistPinToggle` component (bookmark outline/solid from `@heroicons/react`, since Heroicons
+  has no thumbtack icon) is shared between the grid card and the poster strip; the watched toggle is
+  inlined per component instead, since it already differed between the two (and the poster strip has no
+  quick toggle for TV completion, just like the grid does) -- extracting it would have forced one shape
+  onto two different reveal mechanisms for no shared benefit.
+- **TV completion stays a passive, non-interactive badge**, never a toggle, on both the grid card and the
+  strip: the app has no single-tap "mark this whole series watched" today (only per-episode, via the
+  episode tracker), so nothing was invented there. Only a movie's watched picto is a toggle; a series'
+  pin picto still is, since pinning isn't per-episode.
+- **Two reveal mechanisms, not one.** The grid card already drives its hover reveal off React state
+  (`showDetail`, since touch needs a tap-then-navigate-on-second-tap sequence a CSS `:hover` can't
+  express) -- `WatchlistPinToggle`'s `revealed` prop plugs into that directly. The poster strip instead
+  reveals off a real `:hover` on a `group` ancestor for a mouse (cheap, no state needed) plus a `tapped`
+  boolean for touch, so the component grew a `revealOnGroupHover` flag that layers `group-hover:` classes
+  on top of `revealed` rather than replacing it.
+- **Remove moved into the bottom action bar** (next to Episodes and Request on the grid card; next to
+  Request on the poster strip), now that the top corners are reserved purely for state (type, pin,
+  watched) rather than a mix of state and actions. This was the harder half of the ask -- previously
+  Remove lived in the same hover-revealed column as the now-removed pin/seen buttons.
+- **Cypress fallout**: two existing assertions queried `watchlist-item-seen` as a separate element after
+  clicking `watchlist-item-seen-toggle` -- both testids now point at the one merged element, so they
+  assert `aria-pressed` on it instead. Added a case that pins and unpins a title on the detail page and
+  checks the list re-sorts each time, and folded a "no pin picto for a read-only collaborator" check into
+  the existing sharing test rather than duplicating its setup in a new one.
+- Verified live in a browser, not just typechecked: seeded a throwaway list via the API against a
+  freshly `cypress:prepare`'d dev server, logged in as the seeded admin, and clicked through pin/unpin
+  and mark-seen on both the detail grid and the shelf strip. Caught one real bug this way that neither
+  `tsc` nor `eslint` could have: the poster strip's "Added &lt;date&gt;" label shares the hover overlay's
+  top-left corner with the new pin chip and collided with it once the chip stopped being conditional on
+  `item.watched` -- fixed with `mt-5` on the label's row to clear the chip.
+- Verification: `tsc`/`eslint`/`prettier` clean on the client, `pnpm i18n:extract` picked up the new
+  `WatchlistPinToggle.pin`/`.unpin` and `pinfailed` keys.

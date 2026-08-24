@@ -21,7 +21,10 @@ import {
   canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
 import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
-import { isSeries } from '@app/domain/mediaLists/models/MediaListItem';
+import {
+  isPinned,
+  isSeries,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
@@ -52,6 +55,7 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
   seenfailed: 'Something went wrong updating your watched state.',
+  pinfailed: 'Something went wrong updating that pin.',
   sortadded: 'Added Date',
   sorttitle: 'Title',
 });
@@ -90,7 +94,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
     isLoading: itemsLoading,
     revalidate,
   } = useMediaListItems(mediaListId, filter);
-  const { setMovieWatched, setSeasonsWatched, removeItem } =
+  const { setMovieWatched, setSeasonsWatched, setPinned, removeItem } =
     useMediaListMutations(mediaListId);
 
   if (error) {
@@ -240,6 +244,16 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
                       }
                     } catch {
                       addToast(intl.formatMessage(messages.seenfailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onTogglePinned={async () => {
+                    try {
+                      await setPinned(item.id, !isPinned(item));
+                    } catch {
+                      addToast(intl.formatMessage(messages.pinfailed), {
                         appearance: 'error',
                         autoDismiss: true,
                       });

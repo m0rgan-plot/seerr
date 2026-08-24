@@ -257,9 +257,11 @@ describe('Watchlists', () => {
         .find('[data-testid=watchlist-item-seen-toggle]')
         .click();
 
+      // A movie's seen picto is its own toggle now: the same button reports the
+      // state via aria-pressed rather than a separate always-on badge.
       card(MOVIE.tmdbId)
-        .find('[data-testid=watchlist-item-seen]')
-        .should('exist');
+        .find('[data-testid=watchlist-item-seen-toggle]')
+        .should('have.attr', 'aria-pressed', 'true');
 
       cy.get('[data-testid=watchlist-filter-seen]').click();
       cy.get('[data-testid=watchlist-item]').should('have.length', 1);
@@ -338,6 +340,37 @@ describe('Watchlists', () => {
       cy.get('[data-testid=modal-title]').should('contain', 'Request');
       cy.contains('button', 'Cancel').click();
     });
+
+    it('pins a title to the top and unpins it, on the detail page', function () {
+      cy.visit(`/watchlists/${this.listId}`);
+
+      // Added second, so it starts behind the movie until it is pinned.
+      cy.get('[data-testid=watchlist-item]')
+        .eq(1)
+        .should('have.attr', 'data-tmdb-id', String(SERIES.tmdbId));
+
+      openCard(SERIES.tmdbId)
+        .find('[data-testid=watchlist-pin-toggle]')
+        .click();
+
+      cy.get('[data-testid=watchlist-item]')
+        .eq(0)
+        .should('have.attr', 'data-tmdb-id', String(SERIES.tmdbId));
+      card(SERIES.tmdbId)
+        .find('[data-testid=watchlist-pin-toggle]')
+        .should('have.attr', 'aria-pressed', 'true');
+
+      openCard(SERIES.tmdbId)
+        .find('[data-testid=watchlist-pin-toggle]')
+        .click();
+
+      card(SERIES.tmdbId)
+        .find('[data-testid=watchlist-pin-toggle]')
+        .should('have.attr', 'aria-pressed', 'false');
+      cy.get('[data-testid=watchlist-item]')
+        .eq(1)
+        .should('have.attr', 'data-tmdb-id', String(SERIES.tmdbId));
+    });
   });
 
   describe('sharing', () => {
@@ -397,8 +430,13 @@ describe('Watchlists', () => {
         .find('[data-testid=watchlist-item-seen-toggle]')
         .click();
       card(MOVIE.tmdbId)
-        .find('[data-testid=watchlist-item-seen]')
-        .should('exist');
+        .find('[data-testid=watchlist-item-seen-toggle]')
+        .should('have.attr', 'aria-pressed', 'true');
+
+      // Pinning edits the shared list, so it stays absent rather than disabled.
+      card(MOVIE.tmdbId)
+        .find('[data-testid=watchlist-pin-toggle]')
+        .should('not.exist');
     });
 
     it('lets a write collaborator add a title but never delete the list', function () {
