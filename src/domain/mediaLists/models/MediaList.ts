@@ -36,6 +36,11 @@ export interface MediaList {
   role: MediaListRole;
   createdAt: Date;
   updatedAt: Date;
+  // Who the list is shared with, for the shared-with avatar badges (shelf row and
+  // detail header alike). May be fewer than sharedWithCount: the server caps how many
+  // it sends per list.
+  sharedWith: MediaListUser[];
+  sharedWithCount: number;
 }
 
 export interface MediaListSummary extends MediaList {
@@ -43,10 +48,6 @@ export interface MediaListSummary extends MediaList {
   // Titles the signed-in member has finished, not a shared total.
   seenCount: number;
   previewItems: MediaListRef[];
-  // Who the list is shared with, for the shelf row's avatar badges. May be fewer than
-  // sharedWithCount: the server caps how many it sends per list.
-  sharedWith: MediaListUser[];
-  sharedWithCount: number;
 }
 
 // UX gating only. Every mutation is checked again on the server, so these are about not

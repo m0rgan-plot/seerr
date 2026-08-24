@@ -40,6 +40,8 @@ export const toMediaList = (dto: MediaListDto): MediaList => ({
   role: dto.role,
   createdAt: new Date(dto.createdAt),
   updatedAt: new Date(dto.updatedAt),
+  sharedWith: dto.sharedWith.map(toUser),
+  sharedWithCount: dto.sharedWithCount,
 });
 
 export const toMediaListSummary = (
@@ -59,8 +61,6 @@ export const toMediaListSummary = (
     createdAt: new Date(item.createdAt),
     addedBy: toOptionalUser(item.addedBy),
   })),
-  sharedWith: dto.sharedWith.map(toUser),
-  sharedWithCount: dto.sharedWithCount,
 });
 
 export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({

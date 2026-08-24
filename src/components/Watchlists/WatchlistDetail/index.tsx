@@ -9,6 +9,7 @@ import ShareWatchlistModal from '@app/components/Watchlists/ShareWatchlistModal'
 import WatchlistEpisodeTracker from '@app/components/Watchlists/WatchlistEpisodeTracker';
 import WatchlistItemCard from '@app/components/Watchlists/WatchlistItemCard';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
+import WatchlistSharedWithAvatars from '@app/components/Watchlists/WatchlistSharedWithAvatars';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import {
   useMediaList,
@@ -129,6 +130,10 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
           )}
           <div className="mt-3 flex items-center gap-3">
             <WatchlistRoleBadge role={list.role} />
+            <WatchlistSharedWithAvatars
+              sharedWith={list.sharedWith}
+              sharedWithCount={list.sharedWithCount}
+            />
           </div>
         </div>
 

@@ -332,3 +332,40 @@ i18n:extract` picked up the new `added` toast key. Cypress `watchlists.cy.ts` up
 existing media-page cases switched their assertion from `aria-disabled` (which now only reflects an
 in-flight request, not "already added") to a `data-added` attribute on the item row, plus a new case
 that adds then removes the same title from the media page and checks the API count drops back to 0.
+
+## A write collaborator couldn't see who else had access (2026-08-24)
+
+Reported directly: added to a list as a collaborator, no way to see who else was on it -- the
+detail page showed nothing about collaborators at all for a non-owner, not even the owner's name.
+
+- **Root cause was frontend-only.** The backend already permitted it: `GET
+  /:mediaListId/collaborators` asserts `viewList`, which every accepted member (read or write)
+  passes -- only `MediaListAccessPolicy`'s `manageCollaborators` action is owner-only. But
+  `WatchlistDetail`'s only path to that data was the Share button, gated by
+  `canManageCollaborators(list.role)` (owner-only), so a collaborator never fetched or rendered it.
+- **Fixed by giving the detail page its own read-only avatar row**, reusing
+  `WatchlistSharedWithAvatars` (already shipped, unconditional, on the shelf) rather than opening
+  management UI to non-owners. That needed `sharedWith`/`sharedWithCount` on the single-list GET
+  response, which didn't carry them before (only the summary/shelf DTO did) -- moved both fields up
+  from `MediaListSummary` onto the base `MediaList` type/DTO/schema, with `toMediaListDto` taking an
+  optional `sharedWith` array (create/update responses default to `[]`; a just-created list has none
+  and an update's SWR revalidate fetches the real value moments later anyway).
+- **`sharedWith` on the shelf and `sharedWith` on the detail page turned out to need different
+  data**, not just different rendering. The shelf's existing value (from `summariesFor`) is
+  collaborators only -- the owner is deliberately never a collaborator row -- which reads fine
+  narrated as "who did I, the owner, share this with." A collaborator asking "who's in this list"
+  needs the owner too. Added `MediaListViewService.sharedWithFor(listId)`: owner plus accepted-only
+  collaborators (accepted-only via the same batched `findByLists` the index already uses, not
+  `findByList`, which would have leaked pending invitees who haven't joined). The membership-scoped
+  variant of "everyone with access" (`membersFor`, owner + collaborators of any status) already
+  existed for a different job -- seen-by badges -- and stayed untouched.
+- The response is list-scoped, not viewer-relative: sharedWith is the same array regardless of who
+  asks. Excluding the viewer's own face is `WatchlistSharedWithAvatars`'s job client-side, same as
+  it already did on the shelf.
+- Added `data-testid="watchlist-shared-with-avatar"` to each avatar link (there was nothing to hook
+  a Cypress assertion to before) and a case covering the exact reported scenario: a write
+  collaborator sees the owner's avatar with no Share button in sight.
+
+Verification: full server suite (404 tests, +2) green, `tsc`/`eslint` clean both projects. New
+route-level tests cover sharedWith from both the owner's and the collaborator's point of view, and
+that a pending (not yet accepted) invitee never appears in it.

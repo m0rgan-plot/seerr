@@ -227,6 +227,46 @@ describe('media list routes', () => {
       );
     });
 
+    it('includes the owner in sharedWith, so a write collaborator can see who has access', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'write');
+      await acceptInvite(friend, list.id);
+
+      // sharedWith is list-scoped, not viewer-relative: it names owner plus every
+      // accepted collaborator regardless of who is asking. Excluding the viewer's own
+      // face is a frontend concern (WatchlistSharedWithAvatars), not this endpoint's.
+      const expected = [await ownerId(), await friendId()];
+
+      const asFriendRes = await friend.get(`/mediaLists/${list.id}`);
+      assert.strictEqual(asFriendRes.status, 200);
+      assert.deepStrictEqual(
+        asFriendRes.body.sharedWith.map((user: { id: number }) => user.id),
+        expected
+      );
+      assert.strictEqual(asFriendRes.body.sharedWithCount, 2);
+
+      const asOwnerRes = await owner.get(`/mediaLists/${list.id}`);
+      assert.deepStrictEqual(
+        asOwnerRes.body.sharedWith.map((user: { id: number }) => user.id),
+        expected
+      );
+    });
+
+    it('does not include a pending invitee in sharedWith', async () => {
+      const owner = await asOwner();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+
+      const res = await owner.get(`/mediaLists/${list.id}`);
+
+      assert.deepStrictEqual(
+        res.body.sharedWith.map((user: { id: number }) => user.id),
+        [await ownerId()]
+      );
+    });
+
     it('is 403 for someone it was not shared with', async () => {
       const owner = await asOwner();
       const friend = await asFriend();

@@ -54,6 +54,11 @@ export interface MediaList {
   role: MediaListRole;
   createdAt: string;
   updatedAt: string;
+  // Who the list is shared with, for the shared-with avatar badges (shelf row and
+  // detail header alike). Capped server-side; sharedWithCount is the true total, for
+  // an overflow "+N" affordance.
+  sharedWith: MediaListUser[];
+  sharedWithCount: number;
 }
 
 export interface MediaListSummary extends MediaList {
@@ -61,10 +66,6 @@ export interface MediaListSummary extends MediaList {
   // How many titles the requesting member has finished, not a shared total.
   seenCount: number;
   previewItems: MediaListPreviewItem[];
-  // Who the list is shared with, for the shelf row's avatar badges. Capped server-side;
-  // sharedWithCount is the true total, for an overflow "+N" affordance.
-  sharedWith: MediaListUser[];
-  sharedWithCount: number;
 }
 
 export interface MediaListItem {

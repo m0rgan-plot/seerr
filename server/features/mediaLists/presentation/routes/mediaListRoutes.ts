@@ -82,12 +82,15 @@ router.get('/membership', async (req, res, next) => {
 router.get('/:mediaListId', async (req, res, next) => {
   try {
     const listId = listIdParam.parse(req.params.mediaListId);
-    const { lists } = getMediaListServices();
+    const { lists, views } = getMediaListServices();
 
     const list = await lists.view(listId, req.user!.id);
-    const membership = await lists.membershipFor(list, req.user!.id);
+    const [membership, sharedWith] = await Promise.all([
+      lists.membershipFor(list, req.user!.id),
+      views.sharedWithFor(listId),
+    ]);
 
-    return res.status(200).json(toMediaListDto(list, membership));
+    return res.status(200).json(toMediaListDto(list, membership, sharedWith));
   } catch (error) {
     return next(toHttpError(error));
   }

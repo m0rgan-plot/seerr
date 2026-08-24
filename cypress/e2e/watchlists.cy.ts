@@ -415,6 +415,21 @@ describe('Watchlists', () => {
       cy.contains('button', 'Delete List').should('not.exist');
     });
 
+    it('shows a write collaborator who has access, without a Share button', function () {
+      shareWithFriend(this.listId, 'write');
+
+      cy.loginAsUser();
+      acceptInviteViaApi(this.listId);
+      cy.visit(`/watchlists/${this.listId}`);
+
+      // No management UI, but the owner's avatar is still visible: seeing who has
+      // access is not the same permission as managing it.
+      cy.contains('button', 'Share').should('not.exist');
+      cy.get('[data-testid=watchlist-shared-with-avatar]')
+        .should('have.length', 1)
+        .and('have.attr', 'title', 'admin');
+    });
+
     it('withholds access until the invite is accepted through the Invites card', function () {
       shareWithFriend(this.listId, 'read');
 

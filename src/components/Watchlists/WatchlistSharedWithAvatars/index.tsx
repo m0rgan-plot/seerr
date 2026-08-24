@@ -53,6 +53,7 @@ const WatchlistSharedWithAvatars = ({
       {others.map((person, index) => (
         <Link
           key={person.id}
+          data-testid="watchlist-shared-with-avatar"
           href={`/users/${person.id}`}
           title={person.displayName}
           className={`relative rounded-full transition hover:z-10 hover:ring-2 hover:ring-indigo-500 ${index > 0 ? '-ml-2' : ''}`}

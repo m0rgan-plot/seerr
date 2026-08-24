@@ -47,7 +47,12 @@ export const toRole = (membership: MediaListMembership): MediaListRole => {
 
 export const toMediaListDto = (
   list: MediaList,
-  membership: MediaListMembership
+  membership: MediaListMembership,
+  // Optional: create/update responses have nothing new to say here (a just-created
+  // list has no collaborators; the SWR revalidate that follows an update fetches the
+  // real value), so they're free to omit it rather than pay for a lookup at every
+  // write. GET routes pass the real thing.
+  sharedWith: UserRef[] = []
 ): MediaListDto => ({
   id: list.id,
   name: list.name,
@@ -56,12 +61,14 @@ export const toMediaListDto = (
   role: toRole(membership),
   createdAt: list.createdAt.toISOString(),
   updatedAt: list.updatedAt.toISOString(),
+  sharedWith: sharedWith.slice(0, SHARED_WITH_LIMIT).map(toUser),
+  sharedWithCount: sharedWith.length,
 });
 
 export const toMediaListSummaryDto = (
   summary: MediaListSummary
 ): MediaListSummaryDto => ({
-  ...toMediaListDto(summary.list, summary.membership),
+  ...toMediaListDto(summary.list, summary.membership, summary.sharedWith),
   itemCount: summary.itemCount,
   seenCount: summary.seenCount,
   previewItems: summary.previewItems.map((item) => ({
@@ -75,8 +82,6 @@ export const toMediaListSummaryDto = (
     createdAt: item.createdAt.toISOString(),
     addedBy: toOptionalUser(item.addedBy),
   })),
-  sharedWith: summary.sharedWith.slice(0, SHARED_WITH_LIMIT).map(toUser),
-  sharedWithCount: summary.sharedWith.length,
 });
 
 export const toMediaListItemDto = (

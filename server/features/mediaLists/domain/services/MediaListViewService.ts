@@ -177,6 +177,22 @@ export class MediaListViewService {
     ];
   }
 
+  // Everyone with access to a single list -- owner plus accepted collaborators, never a
+  // pending invitee who has not joined yet -- for the detail page's "who's here" avatar
+  // row. Unlike membersFor, this is accepted-only: the same rule the index's batched
+  // lookup applies, reused here via a one-element list rather than a second query path.
+  public async sharedWithFor(listId: number): Promise<UserRef[]> {
+    const [list, byList] = await Promise.all([
+      this.listService.requireList(listId),
+      this.collaborators.findByLists([listId]),
+    ]);
+
+    return [
+      list.owner,
+      ...(byList.get(listId) ?? []).map((collaborator) => collaborator.user),
+    ];
+  }
+
   // Every pending invite for the signed-in user, with an item count per list so the
   // Invites section can show something more than a bare name without touching the
   // items themselves.
