@@ -158,6 +158,23 @@ describe('Watchlists', () => {
     });
   });
 
+  it('shows a title already on the list as Added before it is clicked', () => {
+    createList('Already have this').then((listId: number) => {
+      addItem(listId, MOVIE.tmdbId, 'movie');
+      cy.visit('/watchlists');
+
+      cy.get('[data-testid=watchlist-shelf]')
+        .find('button[aria-label^="Add titles"]')
+        .click();
+      cy.get('#watchlist-add-search').type(MOVIE.title);
+
+      cy.get('[data-testid=watchlist-add-result]')
+        .first()
+        .should('contain', 'Added')
+        .and('be.disabled');
+    });
+  });
+
   describe('a list with titles on it', () => {
     beforeEach(function () {
       createList('Sunday Night Sci-Fi', 'Slow burn').then((listId: number) => {

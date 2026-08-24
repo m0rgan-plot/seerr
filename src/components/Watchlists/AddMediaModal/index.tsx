@@ -2,6 +2,7 @@ import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import Modal from '@app/components/Common/Modal';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
+import { useMediaListItems } from '@app/domain/mediaLists/hooks/useMediaLists';
 import useDebouncedState from '@app/hooks/useDebouncedState';
 import useToasts from '@app/hooks/useToasts';
 import globalMessages from '@app/i18n/globalMessages';
@@ -15,7 +16,7 @@ import {
 import { MediaType } from '@server/constants/media';
 import type { MovieResult, TvResult } from '@server/models/Search';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import useSWR from 'swr';
 
@@ -72,6 +73,18 @@ const AddMediaModal = ({
     debouncedQuery.trim()
       ? `/api/v1/search?query=${encodeURIComponent(debouncedQuery.trim())}`
       : null
+  );
+
+  // Titles already on the list, independent of anything added this session, so a
+  // result reads as "Added" the moment it is searched rather than only after it is
+  // clicked once.
+  const { data: existingItems } = useMediaListItems(mediaListId, 'all');
+  const existingKeys = useMemo(
+    () =>
+      new Set(
+        (existingItems ?? []).map((item) => `${item.mediaType}-${item.tmdbId}`)
+      ),
+    [existingItems]
   );
 
   const results = (data?.results ?? []).filter(
@@ -167,7 +180,7 @@ const AddMediaModal = ({
         <div className="mt-4 flex max-h-80 flex-col gap-1.5 overflow-y-auto">
           {results.map((result) => {
             const key = keyOf(result);
-            const isAdded = added.has(key);
+            const isAdded = existingKeys.has(key) || added.has(key);
             const isSeries = result.mediaType === 'tv';
             const title = isSeries
               ? (result as TvResult).name
