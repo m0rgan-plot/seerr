@@ -64,16 +64,30 @@ const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'seen'];
 
 type ItemSortOption = 'added' | 'title';
 
-const sortItems = <T extends { title: string | null; createdAt: Date }>(
+// Pinned titles always lead, most recently pinned first, exactly like the server order
+// this starts from -- sortBy only decides how the unpinned remainder is ordered. Without
+// this split, choosing a sort would silently undo a pin: an "added" sort by real,
+// distinct timestamps overrides the server's pinned-first order outright, which is what
+// made pinning look like it did nothing.
+const sortItems = <
+  T extends { title: string | null; createdAt: Date; pinnedAt: Date | null },
+>(
   items: T[],
   sortBy: ItemSortOption
-): T[] =>
-  [...items].sort((a, b) => {
-    if (sortBy === 'title') {
-      return (a.title ?? '').localeCompare(b.title ?? '');
+): T[] => {
+  const pinned = [...items.filter((item) => item.pinnedAt !== null)].sort(
+    (a, b) => b.pinnedAt!.getTime() - a.pinnedAt!.getTime()
+  );
+  const unpinned = [...items.filter((item) => item.pinnedAt === null)].sort(
+    (a, b) => {
+      if (sortBy === 'title') {
+        return (a.title ?? '').localeCompare(b.title ?? '');
+      }
+      return b.createdAt.getTime() - a.createdAt.getTime();
     }
-    return b.createdAt.getTime() - a.createdAt.getTime();
-  });
+  );
+  return [...pinned, ...unpinned];
+};
 
 const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const intl = useIntl();

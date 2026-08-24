@@ -20,6 +20,14 @@ interface WatchlistRequestButtonProps {
   status: MediaStatus | null;
   className?: string;
   onRequested?: () => void;
+  // Icon only, no label -- where the row doesn't have room for the full "Request" label
+  // next to the other controls. A Tooltip stands in for the label there.
+  hideLabel?: boolean;
+  // Suppresses the already-assigned status pill entirely -- for the shelf's poster
+  // strip, where a tile has no room for a labelled pill next to Remove and the corner
+  // status dot already carries the same Tooltip legend. The item card grid keeps the
+  // pill even with hideLabel, since its own corner dot has no tooltip to fall back on.
+  hideStatusPill?: boolean;
 }
 
 /**
@@ -38,6 +46,8 @@ const WatchlistRequestButton = ({
   status,
   className,
   onRequested,
+  hideLabel = false,
+  hideStatusPill = false,
 }: WatchlistRequestButtonProps) => {
   const intl = useIntl();
   const [showModal, setShowModal] = useState(false);
@@ -65,22 +75,40 @@ const WatchlistRequestButton = ({
         onCancel={() => setShowModal(false)}
       />
 
-      {requestable && (
-        <Button
-          buttonType="primary"
-          buttonSize="sm"
-          className={className}
-          onClick={(e) => {
-            e.preventDefault();
-            setShowModal(true);
-          }}
-        >
-          <ArrowDownTrayIcon />
-          <span>{intl.formatMessage(globalMessages.request)}</span>
-        </Button>
-      )}
+      {requestable &&
+        (hideLabel ? (
+          <Tooltip content={intl.formatMessage(globalMessages.request)}>
+            <Button
+              buttonType="primary"
+              buttonSize="sm"
+              className={className}
+              onClick={(e) => {
+                e.preventDefault();
+                setShowModal(true);
+              }}
+            >
+              <ArrowDownTrayIcon />
+            </Button>
+          </Tooltip>
+        ) : (
+          <Button
+            buttonType="primary"
+            buttonSize="sm"
+            className={className}
+            onClick={(e) => {
+              e.preventDefault();
+              setShowModal(true);
+            }}
+          >
+            <ArrowDownTrayIcon />
+            <span>{intl.formatMessage(globalMessages.request)}</span>
+          </Button>
+        ))}
 
-      {!requestable && currentStatus && (
+      {/* The shelf strip relies on WatchlistStatusDot for this instead -- a tile has no
+          room for a labelled pill next to Remove, and the dot already carries the same
+          Tooltip legend. */}
+      {!hideStatusPill && !requestable && currentStatus && (
         <Tooltip
           content={<WatchlistStatusLegend />}
           tooltipConfig={{ delayShow: 1000 }}

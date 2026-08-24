@@ -1,5 +1,4 @@
 import Dropdown from '@app/components/Common/Dropdown';
-import Tooltip from '@app/components/Common/Tooltip';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import {
   useMediaListMembership,
@@ -137,55 +136,57 @@ const AddToWatchlistButton = ({
 
   return (
     <div className="relative z-40 mr-2">
-      <Tooltip content={intl.formatMessage(messages.addtowatchlist)}>
-        <div>
-          <Dropdown
-            data-testid="add-to-watchlist-button"
-            text={<RectangleStackIcon />}
-            buttonType="ghost"
-          >
-            {editableLists.length === 0 ? (
-              <div className="px-4 py-2 text-sm text-gray-400">
-                <p>{intl.formatMessage(messages.nolists)}</p>
-                <Link
-                  href="/watchlists"
-                  className="mt-1 inline-block text-indigo-400 hover:underline"
-                >
-                  {intl.formatMessage(messages.managewatchlists)}
-                </Link>
-              </div>
-            ) : (
-              editableLists.map((list) => {
-                const itemId = itemIdByList.get(list.id);
-                const isAdded = itemId !== undefined;
-                return (
-                  <Dropdown.Item
-                    key={list.id}
-                    data-testid="add-to-watchlist-item"
-                    data-added={isAdded}
-                    onClick={() =>
-                      isAdded
-                        ? onRemove(list.id, itemId, list.name)
-                        : onAdd(list.id, list.name)
-                    }
-                    aria-disabled={pending === list.id}
-                  >
-                    {isAdded ? (
-                      <CheckIcon className="h-5 w-5 text-green-400" />
-                    ) : (
-                      <PlusIcon className="h-5 w-5" />
-                    )}
-                    <span className="flex-1 truncate">{list.name}</span>
-                    {isAdded && (
-                      <MinusCircleIcon className="ml-2 h-5 w-5 text-red-400" />
-                    )}
-                  </Dropdown.Item>
-                );
-              })
-            )}
-          </Dropdown>
-        </div>
-      </Tooltip>
+      {/* A native title, not the app's Tooltip: that component's hover boundary covers
+          the whole wrapped subtree, including the opened items list once it renders as
+          a sibling of the trigger button here, so it stayed visible while hovering the
+          list. A native title tooltip is scoped to the button element itself. */}
+      <Dropdown
+        data-testid="add-to-watchlist-button"
+        text={<RectangleStackIcon />}
+        buttonType="ghost"
+        title={intl.formatMessage(messages.addtowatchlist)}
+      >
+        {editableLists.length === 0 ? (
+          <div className="px-4 py-2 text-sm text-gray-400">
+            <p>{intl.formatMessage(messages.nolists)}</p>
+            <Link
+              href="/watchlists"
+              className="mt-1 inline-block text-indigo-400 hover:underline"
+            >
+              {intl.formatMessage(messages.managewatchlists)}
+            </Link>
+          </div>
+        ) : (
+          editableLists.map((list) => {
+            const itemId = itemIdByList.get(list.id);
+            const isAdded = itemId !== undefined;
+            return (
+              <Dropdown.Item
+                key={list.id}
+                buttonType="ghost"
+                data-testid="add-to-watchlist-item"
+                data-added={isAdded}
+                onClick={() =>
+                  isAdded
+                    ? onRemove(list.id, itemId, list.name)
+                    : onAdd(list.id, list.name)
+                }
+                aria-disabled={pending === list.id}
+              >
+                {isAdded ? (
+                  <CheckIcon className="h-5 w-5 text-green-400" />
+                ) : (
+                  <PlusIcon className="h-5 w-5" />
+                )}
+                <span className="flex-1 truncate">{list.name}</span>
+                {isAdded && (
+                  <MinusCircleIcon className="ml-2 h-5 w-5 text-red-400" />
+                )}
+              </Dropdown.Item>
+            );
+          })
+        )}
+      </Dropdown>
     </div>
   );
 };

@@ -77,6 +77,7 @@ export const toMediaListSummaryDto = (
     mediaType: item.mediaType,
     title: item.title,
     posterPath: item.posterPath,
+    year: item.year,
     watched: item.watched,
     status: item.status,
     createdAt: item.createdAt.toISOString(),

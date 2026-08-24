@@ -2184,6 +2184,10 @@ components:
               type: string
               nullable: true
               example: '/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg'
+            year:
+              type: number
+              nullable: true
+              example: 2024
             watched:
               type: boolean
               example: false
@@ -2208,6 +2212,7 @@ components:
             - id
             - title
             - posterPath
+            - year
             - watched
             - status
             - createdAt

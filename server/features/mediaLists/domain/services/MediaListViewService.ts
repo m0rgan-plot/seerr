@@ -45,6 +45,7 @@ export interface MediaListPreviewItem {
   title: string | null;
   // Null when TMDB has no art, or no longer knows the title.
   posterPath: string | null;
+  year: number | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
   watched: boolean;
   // Availability in the library, which is what decides between offering a request and
@@ -352,6 +353,7 @@ export class MediaListViewService {
           watched: view.watched,
           status: view.item.status,
           posterPath: summary?.posterPath ?? null,
+          year: summary?.year ?? null,
           createdAt: view.item.createdAt,
           addedBy: view.item.addedBy,
           pinnedAt: view.item.pinnedAt,

@@ -23,6 +23,7 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   // Relative TMDB path, or null when there is no art. Clients build the full URL the
   // same way they do everywhere else.
   posterPath: string | null;
+  year: number | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
   watched: boolean;
   // Where the title stands in the library. Null when nothing has ever tracked it.

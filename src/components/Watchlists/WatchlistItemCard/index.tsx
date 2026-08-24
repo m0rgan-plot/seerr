@@ -1,5 +1,6 @@
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
+import Avatar from '@app/components/Watchlists/Avatar';
 import RemoveWatchlistItemModal from '@app/components/Watchlists/RemoveWatchlistItemModal';
 import WatchlistPinToggle from '@app/components/Watchlists/WatchlistPinToggle';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
@@ -10,6 +11,7 @@ import {
   isSeries,
 } from '@app/domain/mediaLists/models/MediaListItem';
 import { useIsTouch } from '@app/hooks/useIsTouch';
+import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
@@ -27,11 +29,11 @@ const messages = defineMessages('components.Watchlists.WatchlistItemCard', {
   markunseen: 'Mark Unseen',
   episodes: 'Episodes',
   episodeprogress: '{watched} / {total} episodes',
-  seenbyothers:
-    '{count, plural, one {# other member has seen this} other {# other members have seen this}}',
   untitled: 'Title Unavailable',
   remove: 'Remove',
   removelabel: 'Remove {title} from this watchlist',
+  addedon: 'Added {date}',
+  addedby: 'Added {date} by {name}',
 });
 
 interface WatchlistItemCardProps {
@@ -57,6 +59,7 @@ const WatchlistItemCard = ({
 }: WatchlistItemCardProps) => {
   const intl = useIntl();
   const isTouch = useIsTouch();
+  const { user } = useUser();
 
   const [showDetail, setShowDetail] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -120,7 +123,6 @@ const WatchlistItemCard = ({
               {canEdit && (
                 <WatchlistPinToggle
                   pinned={isPinned(item)}
-                  revealed={showDetail}
                   onToggle={onTogglePinned}
                 />
               )}
@@ -148,9 +150,9 @@ const WatchlistItemCard = ({
                 item.watched && (
                   <div
                     data-testid="watchlist-item-seen"
-                    className="pointer-events-none z-40 flex h-5 w-5 items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
+                    className="pointer-events-none z-40 flex h-6 w-6 items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
                   >
-                    <CheckIcon className="h-3 w-3" />
+                    <CheckIcon className="h-3.5 w-3.5" />
                   </div>
                 )
               ) : (
@@ -165,9 +167,9 @@ const WatchlistItemCard = ({
                   title={intl.formatMessage(
                     item.watched ? messages.markunseen : messages.markseen
                   )}
-                  className={`pointer-events-auto z-40 flex h-5 w-5 flex-none items-center justify-center rounded-full border shadow-md transition duration-150 ${
+                  className={`pointer-events-auto z-40 flex h-6 w-6 flex-none items-center justify-center rounded-full border shadow-md transition duration-150 ${
                     item.watched
-                      ? 'border-green-400 bg-green-500/90 text-green-50'
+                      ? 'border-green-400 bg-green-500/90 text-green-50 hover:border-green-300 hover:bg-green-400'
                       : `border-gray-500 bg-gray-900/60 text-gray-300 hover:border-white hover:text-white ${
                           showDetail
                             ? 'opacity-100'
@@ -175,7 +177,7 @@ const WatchlistItemCard = ({
                         }`
                   }`}
                 >
-                  <CheckIcon className="h-3 w-3" />
+                  <CheckIcon className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
@@ -249,13 +251,28 @@ const WatchlistItemCard = ({
                         })}
                       </div>
                     ) : null}
-                    {item.seenBy.length > 0 && (
-                      <div className="mt-1 text-xs text-gray-300">
-                        {intl.formatMessage(messages.seenbyothers, {
-                          count: item.seenBy.length,
-                        })}
-                      </div>
-                    )}
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
+                      <span>
+                        {intl.formatMessage(
+                          item.addedBy && item.addedBy.id !== user?.id
+                            ? messages.addedby
+                            : messages.addedon,
+                          {
+                            date: intl.formatDate(item.createdAt, {
+                              dateStyle: 'medium',
+                            }),
+                            name: item.addedBy?.displayName,
+                          }
+                        )}
+                      </span>
+                      {item.addedBy && item.addedBy.id !== user?.id && (
+                        <Avatar
+                          user={item.addedBy}
+                          size="sm"
+                          className="ring-2 ring-gray-800"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -303,6 +320,7 @@ const WatchlistItemCard = ({
                   status={item.status}
                   className="h-7 flex-1"
                   onRequested={onRequestUpdate}
+                  hideLabel
                 />
               </div>
             </div>

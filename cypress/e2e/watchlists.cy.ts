@@ -360,6 +360,17 @@ describe('Watchlists', () => {
         .find('[data-testid=watchlist-pin-toggle]')
         .should('have.attr', 'aria-pressed', 'true');
 
+      // A pin has to win over every sort, not just the default one -- switching to an
+      // alphabetical sort would otherwise put "Dune: Part Two" back ahead of "Silo" and
+      // make the pin look undone. This is what actually catches a sort that ignores
+      // pinnedAt: "added" alone can pass by coincidence when two titles land in the
+      // same second, since sqlite's CURRENT_TIMESTAMP only has second resolution.
+      cy.get('[data-testid=watchlist-item-sort]').select('Title');
+      cy.get('[data-testid=watchlist-item]')
+        .eq(0)
+        .should('have.attr', 'data-tmdb-id', String(SERIES.tmdbId));
+      cy.get('[data-testid=watchlist-item-sort]').select('Added Date');
+
       openCard(SERIES.tmdbId)
         .find('[data-testid=watchlist-pin-toggle]')
         .click();

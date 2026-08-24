@@ -56,6 +56,7 @@ export const toMediaListSummary = (
     mediaType: item.mediaType,
     title: item.title,
     posterPath: item.posterPath,
+    year: item.year,
     watched: item.watched,
     status: item.status,
     createdAt: new Date(item.createdAt),
