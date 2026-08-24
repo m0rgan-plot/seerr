@@ -369,3 +369,15 @@ detail page showed nothing about collaborators at all for a non-owner, not even 
 Verification: full server suite (404 tests, +2) green, `tsc`/`eslint` clean both projects. New
 route-level tests cover sharedWith from both the owner's and the collaborator's point of view, and
 that a pending (not yet accepted) invitee never appears in it.
+
+**Follow-up, same day:** the shelf (index page) had the identical gap and I'd left it alone,
+reasoning it was already unconditional and therefore fine. It wasn't -- `summariesFor`'s `sharedWith`
+was still collaborators-only (never the owner), so a collaborator who is the *only* collaborator on
+someone else's list saw an empty avatar row there too: the one "other" in the raw array was their
+own face, filtered out client-side by `WatchlistSharedWithAvatars`, leaving nothing. Reported
+directly after the detail-page fix shipped. Same one-line fix as `sharedWithFor`: prepend `list.owner`
+to the array `summariesFor` already builds, no new query -- the owner is already on hand as part of
+`list` for every iteration. Backward compatible for the owner's own shelf row: the client-side
+self-exclusion now removes the owner entry instead of nothing, netting the same displayed avatars as
+before. Route and service tests updated/added for both endpoints; the Cypress case now checks the
+shelf row before the detail page in one test rather than two.

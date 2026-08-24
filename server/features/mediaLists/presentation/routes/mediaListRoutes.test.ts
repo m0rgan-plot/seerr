@@ -192,6 +192,23 @@ describe('media list routes', () => {
       );
     });
 
+    it('includes the owner in a collaborator sharedWith, same as the detail page', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'write');
+      await acceptInvite(friend, list.id);
+
+      const res = await friend.get('/mediaLists');
+
+      assert.strictEqual(res.body.length, 1);
+      assert.deepStrictEqual(
+        res.body[0].sharedWith.map((user: { id: number }) => user.id),
+        [await ownerId(), await friendId()]
+      );
+      assert.strictEqual(res.body[0].sharedWithCount, 2);
+    });
+
     it('never exposes sensitive user fields', async () => {
       const owner = await asOwner();
       await createList(owner);

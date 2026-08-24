@@ -200,15 +200,18 @@ describe('MediaListViewService', () => {
       );
     });
 
-    it('reports who each list is shared with', async () => {
+    it('reports who each list is shared with, owner included', async () => {
       const harness = buildHarness();
       await harness.seedSharedList();
 
       const [summary] = await harness.viewService.summariesFor(OWNER.id);
 
+      // A collaborator viewing their own row needs the owner too, not just their
+      // fellow collaborators -- the frontend filters out the viewer's own face, not
+      // this layer, so the owner appears here even in the owner's own summary.
       assert.deepStrictEqual(
         summary.sharedWith.map((collaborator) => collaborator.id).sort(),
-        [WRITER.id, READER.id].sort()
+        [OWNER.id, WRITER.id, READER.id].sort()
       );
     });
 

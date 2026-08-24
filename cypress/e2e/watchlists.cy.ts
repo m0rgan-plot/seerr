@@ -415,15 +415,25 @@ describe('Watchlists', () => {
       cy.contains('button', 'Delete List').should('not.exist');
     });
 
-    it('shows a write collaborator who has access, without a Share button', function () {
+    it('shows a write collaborator who has access, on the shelf and the detail page', function () {
       shareWithFriend(this.listId, 'write');
 
       cy.loginAsUser();
       acceptInviteViaApi(this.listId);
-      cy.visit(`/watchlists/${this.listId}`);
 
-      // No management UI, but the owner's avatar is still visible: seeing who has
-      // access is not the same permission as managing it.
+      // The shelf row is the first place this list shows up for a collaborator, and
+      // it has to name the owner too, not just show nothing.
+      cy.visit('/watchlists');
+      cy.get('[data-testid=watchlist-shelf]')
+        .contains('Film club')
+        .parents('[data-testid=watchlist-shelf]')
+        .find('[data-testid=watchlist-shared-with-avatar]')
+        .should('have.length', 1)
+        .and('have.attr', 'title', 'admin');
+
+      // No management UI on the detail page either, but the owner's avatar is still
+      // visible there: seeing who has access is not the same permission as managing it.
+      cy.visit(`/watchlists/${this.listId}`);
       cy.contains('button', 'Share').should('not.exist');
       cy.get('[data-testid=watchlist-shared-with-avatar]')
         .should('have.length', 1)

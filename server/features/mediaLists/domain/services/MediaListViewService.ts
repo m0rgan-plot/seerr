@@ -134,9 +134,16 @@ export class MediaListViewService {
           previewItems: await this.buildPreview(
             byRecency.slice(0, PREVIEW_ITEM_COUNT)
           ),
-          sharedWith: (collaboratorsByList.get(list.id) ?? []).map(
-            (collaborator) => collaborator.user
-          ),
+          // Owner first, then accepted collaborators -- same "everyone with access"
+          // shape sharedWithFor uses for the detail page, so a collaborator sees the
+          // owner here too. The viewer's own face (owner or collaborator) is filtered
+          // out client-side by WatchlistSharedWithAvatars, not here.
+          sharedWith: [
+            list.owner,
+            ...(collaboratorsByList.get(list.id) ?? []).map(
+              (collaborator) => collaborator.user
+            ),
+          ],
         };
       })
     );
