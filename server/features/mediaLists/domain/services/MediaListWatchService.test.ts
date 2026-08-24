@@ -126,8 +126,8 @@ describe('MediaListWatchService', () => {
         WRITER.id
       );
 
-      assert.strictEqual(ownerProgress.watchedEpisodes, 1);
-      assert.strictEqual(writerProgress.watchedEpisodes, 0);
+      assert.strictEqual(ownerProgress.progress.watchedEpisodes, 1);
+      assert.strictEqual(writerProgress.progress.watchedEpisodes, 0);
     });
 
     it('keeps movie state separate per member', async () => {
@@ -170,12 +170,12 @@ describe('MediaListWatchService', () => {
         show.id,
         OWNER.id
       );
-      const season1 = progress.seasons.find(
+      const season1 = progress.progress.seasons.find(
         (season) => season.seasonNumber === 1
       );
       assert.strictEqual(season1?.isComplete, true);
       assert.strictEqual(season1?.watchedEpisodes, 10);
-      assert.strictEqual(progress.isComplete, false);
+      assert.strictEqual(progress.progress.isComplete, false);
     });
 
     it('unmarking a season clears only that season', async () => {
@@ -210,12 +210,12 @@ describe('MediaListWatchService', () => {
         OWNER.id
       );
       assert.strictEqual(
-        progress.seasons.find((season) => season.seasonNumber === 1)
+        progress.progress.seasons.find((season) => season.seasonNumber === 1)
           ?.watchedEpisodes,
         0
       );
       assert.strictEqual(
-        progress.seasons.find((season) => season.seasonNumber === 2)
+        progress.progress.seasons.find((season) => season.seasonNumber === 2)
           ?.isComplete,
         true
       );
@@ -245,8 +245,8 @@ describe('MediaListWatchService', () => {
         show.id,
         OWNER.id
       );
-      assert.strictEqual(progress.isComplete, true);
-      assert.strictEqual(progress.watchedEpisodes, 20);
+      assert.strictEqual(progress.progress.isComplete, true);
+      assert.strictEqual(progress.progress.watchedEpisodes, 20);
     });
 
     // There is no stored season flag, so a season that gains an episode reverts on its
@@ -273,7 +273,7 @@ describe('MediaListWatchService', () => {
         OWNER.id
       );
       assert.strictEqual(
-        progress.seasons.find((season) => season.seasonNumber === 1)
+        progress.progress.seasons.find((season) => season.seasonNumber === 1)
           ?.isComplete,
         false
       );

@@ -35,6 +35,20 @@ export interface MediaListItem {
   seenBy: MediaListUser[];
 }
 
+export interface EpisodeRef {
+  seasonNumber: number;
+  episodeNumber: number;
+}
+
+export interface ItemProgress {
+  progress: ShowProgress;
+  // Which episodes the signed-in member has ticked.
+  episodes: EpisodeRef[];
+}
+
+export const episodeKey = ({ seasonNumber, episodeNumber }: EpisodeRef) =>
+  `${seasonNumber}:${episodeNumber}`;
+
 export type MediaListItemFilter = 'all' | 'unseen' | 'inprogress' | 'seen';
 
 export const isSeries = (item: MediaListItem): boolean => !!item.progress;

@@ -72,6 +72,17 @@ export interface MediaListItem {
   seenBy: MediaListUser[];
 }
 
+export interface MediaListEpisodeRef {
+  seasonNumber: number;
+  episodeNumber: number;
+}
+
+export interface MediaListItemProgress {
+  progress: MediaListShowProgress;
+  // Which episodes the requesting member has ticked, so the checklist can render.
+  episodes: MediaListEpisodeRef[];
+}
+
 export interface MediaListCollaborator {
   user: MediaListUser;
   role: Exclude<MediaListRole, 'owner'>;
