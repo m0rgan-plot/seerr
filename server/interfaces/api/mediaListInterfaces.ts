@@ -122,6 +122,12 @@ export interface MediaListInvite {
   createdAt: string;
 }
 
+// Which of the caller's own lists already hold a given title, keyed off tmdbId +
+// mediaType. Backs the media page's Add to Watchlist button.
+export interface MediaListMembership {
+  listIds: number[];
+}
+
 export type MediaListsResponse = MediaListSummary[];
 export type MediaListItemsResponse = MediaListItem[];
 export type MediaListCollaboratorsResponse = MediaListCollaborator[];

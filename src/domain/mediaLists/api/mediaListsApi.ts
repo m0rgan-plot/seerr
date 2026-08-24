@@ -16,6 +16,9 @@ export const mediaListsKey = '/api/v1/mediaLists';
 
 export const invitesKey = `${mediaListsKey}/invites`;
 
+export const membershipKey = (tmdbId: number, mediaType: MediaType) =>
+  `${mediaListsKey}/membership?tmdbId=${tmdbId}&mediaType=${mediaType}`;
+
 export const listKey = (mediaListId: number) =>
   `${mediaListsKey}/${mediaListId}`;
 

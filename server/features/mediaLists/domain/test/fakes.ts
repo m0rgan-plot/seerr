@@ -163,6 +163,20 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
       }
     });
   }
+
+  async findListIdsContaining(
+    listIds: number[],
+    tmdbId: number,
+    mediaType: MediaType
+  ): Promise<number[]> {
+    const matches = this.items.filter(
+      (item) =>
+        listIds.includes(item.listId) &&
+        item.tmdbId === tmdbId &&
+        item.mediaType === mediaType
+    );
+    return [...new Set(matches.map((item) => item.listId))];
+  }
 }
 
 export class FakeMediaListCollaboratorRepository implements MediaListCollaboratorRepository {

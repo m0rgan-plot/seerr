@@ -23,6 +23,11 @@ export const addMediaListItemSchema = z.object({
   mediaType: z.nativeEnum(MediaType),
 });
 
+export const mediaMembershipQuerySchema = z.object({
+  tmdbId: z.coerce.number().int().positive(),
+  mediaType: z.nativeEnum(MediaType),
+});
+
 export const reorderMediaListSchema = z.object({
   orderedItemIds: z.array(z.coerce.number().int().positive()).min(1),
 });

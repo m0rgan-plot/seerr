@@ -224,4 +224,62 @@ describe('MediaListItemService', () => {
       );
     });
   });
+
+  describe('listIdsContaining', () => {
+    it('reports own and shared lists that already hold the title', async () => {
+      const harness = buildHarness();
+      const shared = await harness.seedSharedList();
+      const solo = await harness.listService.create({
+        name: 'Just me',
+        ownerId: OWNER.id,
+      });
+      await addMovie(harness, shared.id, 1);
+      await addMovie(harness, solo.id, 1);
+
+      const found = await harness.itemService.listIdsContaining(
+        OWNER.id,
+        1,
+        MediaType.MOVIE
+      );
+
+      assert.deepStrictEqual(new Set(found), new Set([shared.id, solo.id]));
+      // The reader shares the same list, so they see it too.
+      assert.deepStrictEqual(
+        await harness.itemService.listIdsContaining(
+          READER.id,
+          1,
+          MediaType.MOVIE
+        ),
+        [shared.id]
+      );
+    });
+
+    it('never reports a list the caller cannot see', async () => {
+      const harness = buildHarness();
+      const shared = await harness.seedSharedList();
+      await addMovie(harness, shared.id, 1);
+
+      const found = await harness.itemService.listIdsContaining(
+        STRANGER.id,
+        1,
+        MediaType.MOVIE
+      );
+
+      assert.deepStrictEqual(found, []);
+    });
+
+    it('treats a movie and a series with the same tmdb id as different titles', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovie(harness, list.id, 1);
+
+      const found = await harness.itemService.listIdsContaining(
+        OWNER.id,
+        1,
+        MediaType.TV
+      );
+
+      assert.deepStrictEqual(found, []);
+    });
+  });
 });

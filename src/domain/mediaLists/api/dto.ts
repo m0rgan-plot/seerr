@@ -9,6 +9,7 @@ export type {
   MediaListItem as MediaListItemDto,
   MediaListItemProgress as MediaListItemProgressDto,
   MediaListItemRef as MediaListItemRefDto,
+  MediaListMembership as MediaListMembershipDto,
   MediaListRole as MediaListRoleDto,
   MediaListSeasonProgress as MediaListSeasonProgressDto,
   MediaListShowProgress as MediaListShowProgressDto,

@@ -33,6 +33,22 @@ export class MediaListItemService {
     return this.items.findByList(listId);
   }
 
+  // Which of the caller's own lists (owned or shared with them) already hold this
+  // title, for the media page's "Add to Watchlist" button to show as already added
+  // without requiring a click first.
+  public async listIdsContaining(
+    userId: number,
+    tmdbId: number,
+    mediaType: MediaType
+  ): Promise<number[]> {
+    const lists = await this.listService.listsFor(userId);
+    return this.items.findListIdsContaining(
+      lists.map((list) => list.id),
+      tmdbId,
+      mediaType
+    );
+  }
+
   public async add(input: {
     listId: number;
     tmdbId: number;

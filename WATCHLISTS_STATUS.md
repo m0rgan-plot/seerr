@@ -291,8 +291,14 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   detail page to add the title to any editable list) existed as uncommitted work in a sibling
   worktree (`peaceful-herding-hopper`, branch `feat/watchlists-add-to-watchlist-button`) — built but
   never committed to any PR branch. Copied over, wired into `MovieDetails`/`TvDetails`, i18n
-  extracted. **Known gap, not fixed here:** unlike `AddMediaModal`, it does not pre-check whether
-  the title is already on a given list — "Added" only appears after adding it (or hitting the 409)
-  within the current page session, same class of issue as the `AddMediaModal` fix above but not
-  addressed for this entry point yet. Doing so needs a way to know, per list, whether a given
-  tmdbId/mediaType is already on it — no batched endpoint for that exists today.
+  extracted.
+- **Closed the gap above with a new endpoint**, `GET /mediaLists/membership?tmdbId=&mediaType=`,
+  since no batched way to ask "which of my lists already hold this title" existed. Backend:
+  `MediaListItemRepository.findListIdsContaining(listIds, tmdbId, mediaType)` (a single `DISTINCT
+  listId` query scoped to a candidate set — the caller's own accessible lists from
+  `MediaListService.listsFor`, never every list in the database), exposed as
+  `MediaListItemService.listIdsContaining(userId, tmdbId, mediaType)`. Frontend:
+  `useMediaListMembership(tmdbId, mediaType)` returns a `Set<number>` of list ids, which
+  `AddToWatchlistButton` now merges with its own session-added set — a list reads "Added" the
+  moment the dropdown opens, matching what `AddMediaModal` already does, including across a full
+  page reload (covered by a new Cypress case).

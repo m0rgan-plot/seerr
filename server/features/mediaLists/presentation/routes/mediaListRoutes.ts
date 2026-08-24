@@ -10,6 +10,7 @@ import { toHttpError } from '@server/features/mediaLists/presentation/routes/err
 import {
   createMediaListSchema,
   listIdParam,
+  mediaMembershipQuerySchema,
   shareMediaListSchema,
   updateCollaboratorRoleSchema,
   updateMediaListSchema,
@@ -54,6 +55,25 @@ router.get('/invites', async (req, res, next) => {
     const invites = await views.invitesFor(req.user!.id);
 
     return res.status(200).json(invites.map(toMediaListInviteDto));
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+// Declared before "/:mediaListId" for the same reason "/invites" is: a literal segment
+// would otherwise be parsed as a list id and fail listIdParam.
+router.get('/membership', async (req, res, next) => {
+  try {
+    const query = mediaMembershipQuerySchema.parse(req.query);
+    const { items } = getMediaListServices();
+
+    const listIds = await items.listIdsContaining(
+      req.user!.id,
+      query.tmdbId,
+      query.mediaType
+    );
+
+    return res.status(200).json({ listIds });
   } catch (error) {
     return next(toHttpError(error));
   }

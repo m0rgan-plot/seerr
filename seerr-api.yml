@@ -8528,6 +8528,40 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/MediaListInvite'
+  /mediaLists/membership:
+    get:
+      summary: Which of the current user's watchlists already hold a title
+      description: >-
+        Scoped to lists the user owns or is shared with. Used by the media page's Add to
+        Watchlist button to show a list as already added without requiring a click first.
+      tags:
+        - medialists
+      parameters:
+        - in: query
+          name: tmdbId
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum:
+              - movie
+              - tv
+      responses:
+        '200':
+          description: List ids that already contain this title
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listIds:
+                    type: array
+                    items:
+                      type: integer
   /mediaLists/{mediaListId}:
     get:
       summary: Get a single watchlist

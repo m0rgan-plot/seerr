@@ -95,6 +95,26 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
     await getRepository(MediaListItemRecord).delete(itemId);
   }
 
+  public async findListIdsContaining(
+    listIds: number[],
+    tmdbId: number,
+    mediaType: MediaType
+  ): Promise<number[]> {
+    if (listIds.length === 0) {
+      return [];
+    }
+
+    const rows = await getRepository(MediaListItemRecord)
+      .createQueryBuilder('item')
+      .select('DISTINCT item.listId', 'listId')
+      .where('item.listId IN (:...listIds)', { listIds })
+      .andWhere('item.tmdbId = :tmdbId', { tmdbId })
+      .andWhere('item.mediaType = :mediaType', { mediaType })
+      .getRawMany<{ listId: number }>();
+
+    return rows.map((row) => row.listId);
+  }
+
   public async applyOrder(
     listId: number,
     orderedItemIds: number[]

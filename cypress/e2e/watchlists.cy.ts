@@ -190,6 +190,26 @@ describe('Watchlists', () => {
       cy.request(`/api/v1/mediaLists/${listId}/items`)
         .its('body')
         .should('have.length', 1);
+
+      // A fresh page load still knows the title is already there, not just this
+      // session's own click.
+      cy.reload();
+      cy.get('[data-testid=add-to-watchlist-button]').click();
+      cy.get('[data-testid=add-to-watchlist-item]')
+        .contains('From the media page')
+        .should('have.attr', 'aria-disabled', 'true');
+    });
+  });
+
+  it('shows a title already on the list as Added on the media page before it is clicked', () => {
+    createList('Already has this movie').then((listId: number) => {
+      addItem(listId, MOVIE.tmdbId, 'movie');
+      cy.visit(`/movie/${MOVIE.tmdbId}`);
+
+      cy.get('[data-testid=add-to-watchlist-button]').click();
+      cy.get('[data-testid=add-to-watchlist-item]')
+        .contains('Already has this movie')
+        .should('have.attr', 'aria-disabled', 'true');
     });
   });
 

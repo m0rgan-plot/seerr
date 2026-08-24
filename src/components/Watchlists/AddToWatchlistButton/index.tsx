@@ -1,6 +1,9 @@
 import Dropdown from '@app/components/Common/Dropdown';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
-import { useMediaLists } from '@app/domain/mediaLists/hooks/useMediaLists';
+import {
+  useMediaListMembership,
+  useMediaLists,
+} from '@app/domain/mediaLists/hooks/useMediaLists';
 import { canEditItems } from '@app/domain/mediaLists/models/MediaList';
 import useToasts from '@app/hooks/useToasts';
 import defineMessages from '@app/utils/defineMessages';
@@ -36,6 +39,13 @@ const AddToWatchlistButton = ({
   const { addToast } = useToasts();
   const { data: lists } = useMediaLists();
   const { addItem } = useMediaListMutations();
+  const resolvedMediaType = mediaType === 'tv' ? MediaType.TV : MediaType.MOVIE;
+  // Lists that already hold this title, independent of anything added this session, so
+  // a list reads "Added" as soon as the dropdown opens rather than only after a click.
+  const { data: existingListIds } = useMediaListMembership(
+    tmdbId,
+    resolvedMediaType
+  );
 
   const [added, setAdded] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState<number | null>(null);
@@ -50,13 +60,7 @@ const AddToWatchlistButton = ({
   const onAdd = async (listId: number, listName: string) => {
     setPending(listId);
     try {
-      await addItem(
-        {
-          tmdbId,
-          mediaType: mediaType === 'tv' ? MediaType.TV : MediaType.MOVIE,
-        },
-        listId
-      );
+      await addItem({ tmdbId, mediaType: resolvedMediaType }, listId);
       setAdded((current) => new Set(current).add(listId));
     } catch (e) {
       // A duplicate just means the title is already there, which is what the row
@@ -102,7 +106,8 @@ const AddToWatchlistButton = ({
           </div>
         ) : (
           editableLists.map((list) => {
-            const isAdded = added.has(list.id);
+            const isAdded =
+              added.has(list.id) || (existingListIds?.has(list.id) ?? false);
             return (
               <Dropdown.Item
                 key={list.id}

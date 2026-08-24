@@ -335,6 +335,70 @@ describe('media list repositories', () => {
 
       assert.strictEqual(await items.findById(item.id), null);
     });
+
+    it('finds which of a candidate set of lists already hold a title', async () => {
+      const { list, owner } = await seedList();
+      const other = await lists.create({
+        name: 'Other',
+        description: null,
+        ownerId: owner.id,
+      });
+      const untouched = await lists.create({
+        name: 'Untouched',
+        description: null,
+        ownerId: owner.id,
+      });
+      await items.add({
+        listId: list.id,
+        tmdbId: 42,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      await items.add({
+        listId: other.id,
+        tmdbId: 42,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      // A series with the same tmdb id is a different title and must not match.
+      await items.add({
+        listId: untouched.id,
+        tmdbId: 42,
+        mediaType: MediaType.TV,
+        addedById: owner.id,
+      });
+
+      const found = await items.findListIdsContaining(
+        [list.id, other.id, untouched.id],
+        42,
+        MediaType.MOVIE
+      );
+
+      assert.deepStrictEqual(new Set(found), new Set([list.id, other.id]));
+    });
+
+    it('ignores lists outside the candidate set', async () => {
+      const { list, owner } = await seedList();
+      const outOfScope = await lists.create({
+        name: 'Not asked about',
+        description: null,
+        ownerId: owner.id,
+      });
+      await items.add({
+        listId: outOfScope.id,
+        tmdbId: 7,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+
+      const found = await items.findListIdsContaining(
+        [list.id],
+        7,
+        MediaType.MOVIE
+      );
+
+      assert.deepStrictEqual(found, []);
+    });
   });
 
   describe('TypeOrmMediaListWatchRepository', () => {

@@ -4,6 +4,7 @@ import type {
   MediaListInviteDto,
   MediaListItemDto,
   MediaListItemProgressDto,
+  MediaListMembershipDto,
   MediaListSummaryDto,
 } from '@app/domain/mediaLists/api/dto';
 import {
@@ -12,6 +13,7 @@ import {
   itemsKey,
   listKey,
   mediaListsKey,
+  membershipKey,
   progressKey,
 } from '@app/domain/mediaLists/api/mediaListsApi';
 import {
@@ -33,6 +35,7 @@ import type {
   MediaListItem,
   MediaListItemFilter,
 } from '@app/domain/mediaLists/models/MediaListItem';
+import type { MediaType } from '@server/constants/media';
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
@@ -70,6 +73,27 @@ export const useMediaList = (
     data: useMemo(() => (data ? toMediaList(data) : undefined), [data]),
     error,
     isLoading: !!mediaListId && !data && !error,
+    revalidate: () => {
+      mutate();
+    },
+  };
+};
+
+// Which of the signed-in member's own lists (owned or shared with them) already hold
+// this title, so the media page's Add to Watchlist button can show a list as already
+// added without requiring a click first.
+export const useMediaListMembership = (
+  tmdbId: number,
+  mediaType: MediaType
+): Query<Set<number>> => {
+  const { data, error, mutate } = useSWR<MediaListMembershipDto>(
+    membershipKey(tmdbId, mediaType)
+  );
+
+  return {
+    data: useMemo(() => (data ? new Set(data.listIds) : undefined), [data]),
+    error,
+    isLoading: !data && !error,
     revalidate: () => {
       mutate();
     },
