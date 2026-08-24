@@ -348,13 +348,13 @@ describe('media list repositories', () => {
         description: null,
         ownerId: owner.id,
       });
-      await items.add({
+      const mine = await items.add({
         listId: list.id,
         tmdbId: 42,
         mediaType: MediaType.MOVIE,
         addedById: owner.id,
       });
-      await items.add({
+      const theirs = await items.add({
         listId: other.id,
         tmdbId: 42,
         mediaType: MediaType.MOVIE,
@@ -368,13 +368,16 @@ describe('media list repositories', () => {
         addedById: owner.id,
       });
 
-      const found = await items.findListIdsContaining(
+      const found = await items.findItemsContaining(
         [list.id, other.id, untouched.id],
         42,
         MediaType.MOVIE
       );
 
-      assert.deepStrictEqual(new Set(found), new Set([list.id, other.id]));
+      assert.deepStrictEqual(
+        new Set(found.map((match) => `${match.listId}:${match.itemId}`)),
+        new Set([`${list.id}:${mine.id}`, `${other.id}:${theirs.id}`])
+      );
     });
 
     it('ignores lists outside the candidate set', async () => {
@@ -391,7 +394,7 @@ describe('media list repositories', () => {
         addedById: owner.id,
       });
 
-      const found = await items.findListIdsContaining(
+      const found = await items.findItemsContaining(
         [list.id],
         7,
         MediaType.MOVIE

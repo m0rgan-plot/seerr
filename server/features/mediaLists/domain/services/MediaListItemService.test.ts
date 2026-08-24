@@ -225,32 +225,35 @@ describe('MediaListItemService', () => {
     });
   });
 
-  describe('listIdsContaining', () => {
-    it('reports own and shared lists that already hold the title', async () => {
+  describe('itemsContaining', () => {
+    it('reports own and shared lists that already hold the title, with the item id', async () => {
       const harness = buildHarness();
       const shared = await harness.seedSharedList();
       const solo = await harness.listService.create({
         name: 'Just me',
         ownerId: OWNER.id,
       });
-      await addMovie(harness, shared.id, 1);
-      await addMovie(harness, solo.id, 1);
+      const sharedItem = await addMovie(harness, shared.id, 1);
+      const soloItem = await addMovie(harness, solo.id, 1);
 
-      const found = await harness.itemService.listIdsContaining(
+      const found = await harness.itemService.itemsContaining(
         OWNER.id,
         1,
         MediaType.MOVIE
       );
 
-      assert.deepStrictEqual(new Set(found), new Set([shared.id, solo.id]));
+      assert.deepStrictEqual(
+        new Set(found.map((match) => `${match.listId}:${match.itemId}`)),
+        new Set([`${shared.id}:${sharedItem.id}`, `${solo.id}:${soloItem.id}`])
+      );
       // The reader shares the same list, so they see it too.
       assert.deepStrictEqual(
-        await harness.itemService.listIdsContaining(
+        await harness.itemService.itemsContaining(
           READER.id,
           1,
           MediaType.MOVIE
         ),
-        [shared.id]
+        [{ listId: shared.id, itemId: sharedItem.id }]
       );
     });
 
@@ -259,7 +262,7 @@ describe('MediaListItemService', () => {
       const shared = await harness.seedSharedList();
       await addMovie(harness, shared.id, 1);
 
-      const found = await harness.itemService.listIdsContaining(
+      const found = await harness.itemService.itemsContaining(
         STRANGER.id,
         1,
         MediaType.MOVIE
@@ -273,7 +276,7 @@ describe('MediaListItemService', () => {
       const list = await harness.seedSharedList();
       await addMovie(harness, list.id, 1);
 
-      const found = await harness.itemService.listIdsContaining(
+      const found = await harness.itemService.itemsContaining(
         OWNER.id,
         1,
         MediaType.TV

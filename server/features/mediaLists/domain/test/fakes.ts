@@ -164,18 +164,19 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
     });
   }
 
-  async findListIdsContaining(
+  async findItemsContaining(
     listIds: number[],
     tmdbId: number,
     mediaType: MediaType
-  ): Promise<number[]> {
-    const matches = this.items.filter(
-      (item) =>
-        listIds.includes(item.listId) &&
-        item.tmdbId === tmdbId &&
-        item.mediaType === mediaType
-    );
-    return [...new Set(matches.map((item) => item.listId))];
+  ): Promise<{ listId: number; itemId: number }[]> {
+    return this.items
+      .filter(
+        (item) =>
+          listIds.includes(item.listId) &&
+          item.tmdbId === tmdbId &&
+          item.mediaType === mediaType
+      )
+      .map((item) => ({ listId: item.listId, itemId: item.id }));
   }
 }
 

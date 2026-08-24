@@ -22,12 +22,14 @@ export interface MediaListItemRepository {
   remove(itemId: number): Promise<void>;
   // Applies the given order as a single unit so a failure cannot leave gaps.
   applyOrder(listId: number, orderedItemIds: number[]): Promise<void>;
-  // Which of the given lists already hold this title, for the media page's "already on
-  // this list" check. Scoped to a candidate set rather than global so it stays a single
-  // query against lists the caller can already see, not every list in the database.
-  findListIdsContaining(
+  // Which of the given lists already hold this title, and the item id on each one, for
+  // the media page's "already on this list" check -- the item id is what lets that
+  // button remove the title again without a second lookup. Scoped to a candidate set
+  // rather than global so it stays a single query against lists the caller can already
+  // see, not every list in the database.
+  findItemsContaining(
     listIds: number[],
     tmdbId: number,
     mediaType: MediaType
-  ): Promise<number[]>;
+  ): Promise<{ listId: number; itemId: number }[]>;
 }

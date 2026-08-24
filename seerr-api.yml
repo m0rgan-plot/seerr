@@ -8552,16 +8552,21 @@ paths:
               - tv
       responses:
         '200':
-          description: List ids that already contain this title
+          description: Lists that already contain this title, with the item id on each
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  listIds:
+                  items:
                     type: array
                     items:
-                      type: integer
+                      type: object
+                      properties:
+                        listId:
+                          type: integer
+                        itemId:
+                          type: integer
   /mediaLists/{mediaListId}:
     get:
       summary: Get a single watchlist

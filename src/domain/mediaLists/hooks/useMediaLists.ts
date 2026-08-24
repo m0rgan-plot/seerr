@@ -80,18 +80,25 @@ export const useMediaList = (
 };
 
 // Which of the signed-in member's own lists (owned or shared with them) already hold
-// this title, so the media page's Add to Watchlist button can show a list as already
-// added without requiring a click first.
+// this title, mapped to the item id on each, so the media page's Add to Watchlist
+// button can show a list as already added -- and remove it again -- without a click
+// first.
 export const useMediaListMembership = (
   tmdbId: number,
   mediaType: MediaType
-): Query<Set<number>> => {
+): Query<Map<number, number>> => {
   const { data, error, mutate } = useSWR<MediaListMembershipDto>(
     membershipKey(tmdbId, mediaType)
   );
 
   return {
-    data: useMemo(() => (data ? new Set(data.listIds) : undefined), [data]),
+    data: useMemo(
+      () =>
+        data
+          ? new Map(data.items.map(({ listId, itemId }) => [listId, itemId]))
+          : undefined,
+      [data]
+    ),
     error,
     isLoading: !data && !error,
     revalidate: () => {

@@ -185,7 +185,7 @@ describe('Watchlists', () => {
         .click();
       cy.get('[data-testid=add-to-watchlist-item]')
         .contains('From the media page')
-        .should('have.attr', 'aria-disabled', 'true');
+        .should('have.attr', 'data-added', 'true');
 
       cy.request(`/api/v1/mediaLists/${listId}/items`)
         .its('body')
@@ -197,7 +197,7 @@ describe('Watchlists', () => {
       cy.get('[data-testid=add-to-watchlist-button]').click();
       cy.get('[data-testid=add-to-watchlist-item]')
         .contains('From the media page')
-        .should('have.attr', 'aria-disabled', 'true');
+        .should('have.attr', 'data-added', 'true');
     });
   });
 
@@ -209,7 +209,27 @@ describe('Watchlists', () => {
       cy.get('[data-testid=add-to-watchlist-button]').click();
       cy.get('[data-testid=add-to-watchlist-item]')
         .contains('Already has this movie')
-        .should('have.attr', 'aria-disabled', 'true');
+        .should('have.attr', 'data-added', 'true');
+    });
+  });
+
+  it('removes a title from a list by clicking it again on the media page', () => {
+    createList('Toggle from the media page').then((listId: number) => {
+      addItem(listId, MOVIE.tmdbId, 'movie');
+      cy.visit(`/movie/${MOVIE.tmdbId}`);
+
+      cy.get('[data-testid=add-to-watchlist-button]').click();
+      cy.get('[data-testid=add-to-watchlist-item]')
+        .contains('Toggle from the media page')
+        .should('have.attr', 'data-added', 'true')
+        .click();
+      cy.get('[data-testid=add-to-watchlist-item]')
+        .contains('Toggle from the media page')
+        .should('have.attr', 'data-added', 'false');
+
+      cy.request(`/api/v1/mediaLists/${listId}/items`)
+        .its('body')
+        .should('have.length', 0);
     });
   });
 

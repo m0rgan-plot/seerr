@@ -95,24 +95,26 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
     await getRepository(MediaListItemRecord).delete(itemId);
   }
 
-  public async findListIdsContaining(
+  public async findItemsContaining(
     listIds: number[],
     tmdbId: number,
     mediaType: MediaType
-  ): Promise<number[]> {
+  ): Promise<{ listId: number; itemId: number }[]> {
     if (listIds.length === 0) {
       return [];
     }
 
+    // At most one row per list can match: (list, tmdbId, mediaType) is unique.
     const rows = await getRepository(MediaListItemRecord)
       .createQueryBuilder('item')
-      .select('DISTINCT item.listId', 'listId')
+      .select('item.id', 'itemId')
+      .addSelect('item.listId', 'listId')
       .where('item.listId IN (:...listIds)', { listIds })
       .andWhere('item.tmdbId = :tmdbId', { tmdbId })
       .andWhere('item.mediaType = :mediaType', { mediaType })
-      .getRawMany<{ listId: number }>();
+      .getRawMany<{ listId: number; itemId: number }>();
 
-    return rows.map((row) => row.listId);
+    return rows;
   }
 
   public async applyOrder(

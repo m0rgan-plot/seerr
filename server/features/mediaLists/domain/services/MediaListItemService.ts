@@ -34,15 +34,16 @@ export class MediaListItemService {
   }
 
   // Which of the caller's own lists (owned or shared with them) already hold this
-  // title, for the media page's "Add to Watchlist" button to show as already added
-  // without requiring a click first.
-  public async listIdsContaining(
+  // title, and the item id on each one, for the media page's "Add to Watchlist" button
+  // to show as already added -- and let a repeat click remove it -- without a click
+  // first.
+  public async itemsContaining(
     userId: number,
     tmdbId: number,
     mediaType: MediaType
-  ): Promise<number[]> {
+  ): Promise<{ listId: number; itemId: number }[]> {
     const lists = await this.listService.listsFor(userId);
-    return this.items.findListIdsContaining(
+    return this.items.findItemsContaining(
       lists.map((list) => list.id),
       tmdbId,
       mediaType

@@ -302,3 +302,33 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   `AddToWatchlistButton` now merges with its own session-added set — a list reads "Added" the
   moment the dropdown opens, matching what `AddMediaModal` already does, including across a full
   page reload (covered by a new Cypress case).
+
+## Add to Watchlist button: redesign + click-to-remove (2026-08-24)
+
+Explored the button's look with `/design` (three directions, static mockups, reproduced against the
+real action row's tokens) and the user picked the icon-only compact direction — same size/border as
+the Blocklist and Plex-Watchlist icon buttons it sits between, a `Tooltip` for discoverability, the
+existing `Dropdown` component's built-in chevron rather than a separate corner badge.
+
+Mid-review the user also asked for a real behavior change: clicking a list that already has the
+title should remove it, not sit there disabled. That needed the item id, not just a yes/no, so the
+membership endpoint's shape changed:
+
+- `MediaListMembership` is now `{ items: { listId, itemId }[] }`, not `{ listIds: number[] }`.
+- `MediaListItemRepository.findListIdsContaining` → `findItemsContaining`, selecting `item.id` and
+  `item.listId` directly (no `DISTINCT` needed — `(list, tmdbId, mediaType)` is already unique).
+- `MediaListItemService.listIdsContaining` → `itemsContaining`, same signature otherwise.
+- `useMediaListMembership` now returns a `Map<number, number>` (listId → itemId) instead of a
+  `Set<number>`.
+- `AddToWatchlistButton` layers two session-only overrides on top of that map — an add records the
+  id the server just handed back (so it can be removed again without waiting on a refetch), a
+  remove records a plain override (nothing left to look up). A 409 duplicate still means the
+  membership snapshot was stale, so it now triggers a revalidate instead of guessing an item id.
+- Also fixed while in there: adding a title never toasted success (only failure/duplicate did) —
+  spotted because removing suddenly did and the asymmetry was obvious. Both now toast.
+
+Verification: full server suite (402 tests) green, `tsc`/`eslint` clean both projects, `pnpm
+i18n:extract` picked up the new `added` toast key. Cypress `watchlists.cy.ts` updated: the two
+existing media-page cases switched their assertion from `aria-disabled` (which now only reflects an
+in-flight request, not "already added") to a `data-added` attribute on the item row, plus a new case
+that adds then removes the same title from the media page and checks the API count drops back to 0.

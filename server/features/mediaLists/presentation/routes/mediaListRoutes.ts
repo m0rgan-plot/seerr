@@ -67,13 +67,13 @@ router.get('/membership', async (req, res, next) => {
     const query = mediaMembershipQuerySchema.parse(req.query);
     const { items } = getMediaListServices();
 
-    const listIds = await items.listIdsContaining(
+    const matches = await items.itemsContaining(
       req.user!.id,
       query.tmdbId,
       query.mediaType
     );
 
-    return res.status(200).json({ listIds });
+    return res.status(200).json({ items: matches });
   } catch (error) {
     return next(toHttpError(error));
   }
