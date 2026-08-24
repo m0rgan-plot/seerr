@@ -22,6 +22,7 @@ import PersonCard from '@app/components/PersonCard';
 import RequestButton from '@app/components/RequestButton';
 import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
+import AddToWatchlistButton from '@app/components/Watchlists/AddToWatchlistButton';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
@@ -620,6 +621,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
                 )}
               </>
             )}
+          <AddToWatchlistButton mediaType="movie" tmdbId={data.id} />
           <div className="z-20">
             <PlayButton links={mediaLinks} />
           </div>

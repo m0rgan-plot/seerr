@@ -175,6 +175,24 @@ describe('Watchlists', () => {
     });
   });
 
+  it('adds a title to a list from the media page', () => {
+    createList('From the media page').then((listId: number) => {
+      cy.visit(`/movie/${MOVIE.tmdbId}`);
+
+      cy.get('[data-testid=add-to-watchlist-button]').click();
+      cy.get('[data-testid=add-to-watchlist-item]')
+        .contains('From the media page')
+        .click();
+      cy.get('[data-testid=add-to-watchlist-item]')
+        .contains('From the media page')
+        .should('have.attr', 'aria-disabled', 'true');
+
+      cy.request(`/api/v1/mediaLists/${listId}/items`)
+        .its('body')
+        .should('have.length', 1);
+    });
+  });
+
   describe('a list with titles on it', () => {
     beforeEach(function () {
       createList('Sunday Night Sci-Fi', 'Slow burn').then((listId: number) => {

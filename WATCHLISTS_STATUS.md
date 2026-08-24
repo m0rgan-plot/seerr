@@ -276,3 +276,23 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   before adding a new one.
 - Frontend mapper unit tests have no runner today; plan keeps the frontend logic-free and relies on
   Cypress. Adding Vitest is an open option if mapper-level tests are wanted.
+
+## PR #24 follow-ups (2026-08-23/24)
+
+- **Index sort wasn't actually broken** — the "shared lists stay first" report turned out to be a
+  second, real bug: adding or removing an item never bumped the owning `MediaList.updatedAt`
+  (only name/description edits did, via TypeORM's `@UpdateDateColumn` on `save()`). The default
+  "Last Modified" sort therefore never reflected list activity. Fixed with a `touch(id)` method on
+  `MediaListRepository`, called from `MediaListItemService.add()`/`remove()`.
+- **`AddMediaModal` now cross-references the list's current items** (`useMediaListItems`) so a
+  search result already on the list reads "Added" and is disabled as soon as it renders, not only
+  after being clicked once.
+- **`AddToWatchlistButton` recovered and wired in.** This component (a dropdown on the movie/tv
+  detail page to add the title to any editable list) existed as uncommitted work in a sibling
+  worktree (`peaceful-herding-hopper`, branch `feat/watchlists-add-to-watchlist-button`) — built but
+  never committed to any PR branch. Copied over, wired into `MovieDetails`/`TvDetails`, i18n
+  extracted. **Known gap, not fixed here:** unlike `AddMediaModal`, it does not pre-check whether
+  the title is already on a given list — "Added" only appears after adding it (or hitting the 409)
+  within the current page session, same class of issue as the `AddMediaModal` fix above but not
+  addressed for this entry point yet. Doing so needs a way to know, per list, whether a given
+  tmdbId/mediaType is already on it — no batched endpoint for that exists today.
