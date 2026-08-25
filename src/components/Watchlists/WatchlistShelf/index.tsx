@@ -137,6 +137,7 @@ const WatchlistShelf = ({
           listId={list.id}
           name={list.name}
           previewItems={list.previewItems}
+          itemCount={list.itemCount}
           canAdd={canEditItems(list.role)}
           onAdd={() => onAddMedia(list)}
         />

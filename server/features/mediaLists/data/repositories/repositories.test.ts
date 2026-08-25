@@ -292,7 +292,7 @@ describe('media list repositories', () => {
       );
       assert.deepStrictEqual(
         ordered.map((item) => item.position),
-        [0, 1, 2]
+        [2, 1, 0]
       );
     });
 
@@ -336,12 +336,12 @@ describe('media list repositories', () => {
       const afterUnpin = await items.findByList(list.id);
       assert.deepStrictEqual(
         afterUnpin.map((item) => item.tmdbId),
-        [3, 1, 2]
+        [3, 2, 1]
       );
       assert.strictEqual(afterUnpin[1].pinnedAt, null);
     });
 
-    it('pages the pinned-first, position-ascending order', async () => {
+    it('pages the pinned-first, most-recently-added order', async () => {
       const { list, owner } = await seedList();
       await items.add({
         listId: list.id,
@@ -377,12 +377,12 @@ describe('media list repositories', () => {
       assert.strictEqual(firstPage.total, 3);
       assert.deepStrictEqual(
         firstPage.items.map((item) => item.tmdbId),
-        [3, 1]
+        [3, 2]
       );
       assert.strictEqual(secondPage.total, 3);
       assert.deepStrictEqual(
         secondPage.items.map((item) => item.tmdbId),
-        [2]
+        [1]
       );
     });
 

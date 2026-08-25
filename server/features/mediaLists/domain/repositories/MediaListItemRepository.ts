@@ -25,7 +25,7 @@ export interface MediaListItemRepository {
   findById(itemId: number): Promise<MediaListItem | null>;
   findByList(listId: number): Promise<MediaListItem[]>;
   // Same order as findByList (pinned first, most recently pinned first, then the
-  // unpinned tail by position ascending), with an optional skip/take window -- the
+  // unpinned tail most-recently-added first), with an optional skip/take window -- the
   // one order a SQL query can express here, since title sorting depends on a
   // TMDB-resolved summary the DB never stores.
   findPageInList(

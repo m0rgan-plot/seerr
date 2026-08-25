@@ -134,14 +134,13 @@ export class MediaListViewService {
           allSeasonCounts: false,
         });
 
-        // findByList orders by position ascending; the preview reads as "what's new on
-        // this list", so it takes the highest positions instead. Manual drag-reorder
-        // was never built (see WATCHLISTS_STATUS.md), so position is still exactly an
+        // findByList already returns pinned-first (most recently pinned first), then
+        // unpinned by highest position first -- the same "what's new on this list" order
+        // the preview wants, so this re-sort just makes that order explicit rather than
+        // relying on the repository's ordering going unchanged. Manual drag-reorder was
+        // never built (see WATCHLISTS_STATUS.md), so position is still exactly an
         // insertion counter today -- a more reliable "most recent" signal than a
         // timestamp column, which two adds in the same request could tie on.
-        //
-        // Pinned titles lead the strip the same way they lead the detail page, most
-        // recently pinned first, ahead of every unpinned title regardless of recency.
         const pinned = views
           .filter((view) => view.item.pinnedAt !== null)
           .sort(

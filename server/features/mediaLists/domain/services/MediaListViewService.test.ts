@@ -91,7 +91,7 @@ describe('MediaListViewService', () => {
         })),
         [
           {
-            id: items[1].id,
+            id: items[0].id,
             tmdbId: 12,
             mediaType: MediaType.MOVIE,
             title: 'Title 12',
@@ -101,7 +101,7 @@ describe('MediaListViewService', () => {
             addedBy: OWNER,
           },
           {
-            id: items[0].id,
+            id: items[1].id,
             tmdbId: 11,
             mediaType: MediaType.MOVIE,
             title: 'Title 11',
@@ -119,10 +119,11 @@ describe('MediaListViewService', () => {
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [21, 22]);
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
-      // The first added, which the preview now places last.
+      // items are most-recently-added first, so items[1] is the first added -- the one
+      // the preview places last.
       await harness.watchService.setMovieWatched(
         list.id,
-        items[0].id,
+        items[1].id,
         OWNER.id,
         true
       );
@@ -169,9 +170,10 @@ describe('MediaListViewService', () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [1, 2, 3]);
+      // items are most-recently-added first, so items[2] is the oldest -- tmdbId 1.
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
 
-      await harness.itemService.setPinned(list.id, items[0].id, OWNER.id, true);
+      await harness.itemService.setPinned(list.id, items[2].id, OWNER.id, true);
 
       const [summary] = await harness.viewService.summariesFor(OWNER.id);
 
@@ -341,7 +343,7 @@ describe('MediaListViewService', () => {
 
       assert.strictEqual(results.length, 9);
       assert.strictEqual(harness.summaryCalls.length, 9);
-      assert.strictEqual(results[0].summary?.title, 'Title 1');
+      assert.strictEqual(results[0].summary?.title, 'Title 9');
     });
 
     // A ring reading 0/0 is worse than the extra cached lookup, so the detail page asks
@@ -402,10 +404,11 @@ describe('MediaListViewService', () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [1, 2]);
+      // items are most-recently-added first, so items[0] is tmdbId 2.
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
       await harness.watchService.setMovieWatched(
         list.id,
-        items[1].id,
+        items[0].id,
         OWNER.id,
         true
       );
@@ -431,13 +434,14 @@ describe('MediaListViewService', () => {
       );
     });
 
-    it('pages the default added-date order, pinned leading, unpinned by position', async () => {
+    it('pages the default added-date order, pinned leading, unpinned most-recently-added first', async () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [1, 2, 3, 4, 5]);
+      // items are most-recently-added first, so items[0] is tmdbId 5.
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
-      // Pinning a later item should still put it first, ahead of every earlier add.
-      await harness.itemService.setPinned(list.id, items[4].id, OWNER.id, true);
+      // Pinning the most recent add should still put it first, same as an unpinned one.
+      await harness.itemService.setPinned(list.id, items[0].id, OWNER.id, true);
 
       const firstPage = await harness.viewService.itemViewsFor(
         list.id,
@@ -460,11 +464,11 @@ describe('MediaListViewService', () => {
       assert.strictEqual(firstPage.totalPages, 3);
       assert.deepStrictEqual(
         firstPage.results.map((view) => view.item.tmdbId),
-        [5, 1]
+        [5, 4]
       );
       assert.deepStrictEqual(
         secondPage.results.map((view) => view.item.tmdbId),
-        [2, 3]
+        [3, 2]
       );
     });
 

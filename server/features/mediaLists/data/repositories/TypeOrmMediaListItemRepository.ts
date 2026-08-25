@@ -26,9 +26,11 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
 
   public async findByList(listId: number): Promise<MediaListItem[]> {
     // Pinned items lead regardless of position, most recently pinned first; everything
-    // else keeps the manual order. NULLS ordering isn't consistent across sqlite and
-    // postgres, so the pinned/unpinned split is spelled out as a CASE instead of relying
-    // on driver defaults for where a null pinnedAt sorts.
+    // else is most-recently-added first (highest position, since no drag-reorder UI
+    // exists to give position any other meaning -- see WATCHLISTS_STATUS.md). NULLS
+    // ordering isn't consistent across sqlite and postgres, so the pinned/unpinned split
+    // is spelled out as a CASE instead of relying on driver defaults for where a null
+    // pinnedAt sorts.
     const records = await getRepository(MediaListItemRecord)
       .createQueryBuilder('item')
       // The media row carries the library status the cards need, and it is a join on a
@@ -38,8 +40,8 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
       .where('item.listId = :listId', { listId })
       .orderBy('CASE WHEN item.pinnedAt IS NULL THEN 1 ELSE 0 END', 'ASC')
       .addOrderBy('item.pinnedAt', 'DESC')
-      .addOrderBy('item.position', 'ASC')
-      .addOrderBy('item.id', 'ASC')
+      .addOrderBy('item.position', 'DESC')
+      .addOrderBy('item.id', 'DESC')
       .getMany();
     return records.map((record) => toMediaListItem(record, listId));
   }
@@ -59,13 +61,10 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
     const total = await base().getCount();
 
     // Same order as findByList: pinned leads, most recently pinned first, then the
-    // unpinned tail by position ascending -- manual reorder's own order, which this
-    // has to keep respecting since /reorder is a real, tested v1 feature (see
-    // WATCHLISTS_STATUS.md), not something this pagination pass gets to redefine. The
-    // CASE has to be a named, selected column (not an inline ORDER BY expression)
-    // because skip/take combined with the joins below routes through TypeORM's
-    // raw-query pagination path, which cannot resolve an inline expression's alias
-    // there.
+    // unpinned tail most-recently-added first (highest position). The CASE has to be a
+    // named, selected column (not an inline ORDER BY expression) because skip/take
+    // combined with the joins below routes through TypeORM's raw-query pagination path,
+    // which cannot resolve an inline expression's alias there.
     const records = await base()
       .leftJoinAndSelect('item.addedBy', 'addedBy')
       .leftJoinAndSelect('item.media', 'media')
@@ -75,8 +74,8 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
       )
       .orderBy('pinned_order', 'ASC')
       .addOrderBy('item.pinnedAt', 'DESC')
-      .addOrderBy('item.position', 'ASC')
-      .addOrderBy('item.id', 'ASC')
+      .addOrderBy('item.position', 'DESC')
+      .addOrderBy('item.id', 'DESC')
       .skip(skip)
       .take(take)
       .getMany();
@@ -188,6 +187,9 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
     orderedItemIds: number[]
   ): Promise<void> {
     // One transaction so a partial write cannot leave two items sharing a position.
+    // Reads sort position DESC (highest first), so the first id in orderedItemIds has
+    // to land on the highest position for the given order to come back unchanged.
+    const lastIndex = orderedItemIds.length - 1;
     await getRepository(MediaListItemRecord).manager.transaction(
       async (manager) => {
         await Promise.all(
@@ -195,7 +197,7 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
             manager.update(
               MediaListItemRecord,
               { id: itemId, list: { id: listId } },
-              { position: index }
+              { position: lastIndex - index }
             )
           )
         );

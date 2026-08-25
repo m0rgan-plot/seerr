@@ -13,7 +13,12 @@ import useClickOutside from '@app/hooks/useClickOutside';
 import { useIsTouch } from '@app/hooks/useIsTouch';
 import useToasts from '@app/hooks/useToasts';
 import defineMessages from '@app/utils/defineMessages';
-import { CheckIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useCallback, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
@@ -21,6 +26,8 @@ import { useIntl } from 'react-intl';
 const messages = defineMessages('components.Watchlists.WatchlistPosterStrip', {
   add: 'Add',
   addtitles: 'Add titles to {name}',
+  viewall: 'View All',
+  viewalllist: 'View all of {name}',
   untitled: 'Title Unavailable',
   empty: 'Nothing on this list yet.',
   markseen: 'Mark Seen',
@@ -36,6 +43,9 @@ interface WatchlistPosterStripProps {
   listId: number;
   name: string;
   previewItems: MediaListRef[];
+  // How many titles the list actually holds -- previewItems is capped, so this is what
+  // tells the strip whether there is more to see than what it is showing.
+  itemCount: number;
   // The add tile and hover CTAs only appear for members who may actually change the list.
   canAdd: boolean;
   onAdd: () => void;
@@ -45,6 +55,7 @@ const WatchlistPosterStrip = ({
   listId,
   name,
   previewItems,
+  itemCount,
   canAdd,
   onAdd,
 }: WatchlistPosterStripProps) => {
@@ -310,6 +321,24 @@ const WatchlistPosterStrip = ({
         <span className="self-center text-sm text-gray-500">
           {intl.formatMessage(messages.empty)}
         </span>
+      )}
+
+      {itemCount > previewItems.length && (
+        // Preview is capped (see PREVIEW_ITEM_COUNT server-side), so once a list
+        // outgrows it this is the only visible cue that there is more than what is
+        // shown here -- the row-level click on WatchlistShelf already goes to the same
+        // place, but nothing inside the strip itself hinted at that before this tile.
+        <Link
+          href={`/watchlists/${listId}`}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={intl.formatMessage(messages.viewalllist, { name })}
+          className="flex aspect-[2/3] w-[108px] flex-none flex-col items-center justify-center gap-1 rounded-lg border border-gray-700 text-gray-400 transition duration-150 hover:border-gray-500 hover:text-gray-300"
+        >
+          <ChevronRightIcon className="h-6 w-6" />
+          <span className="text-xs">
+            {intl.formatMessage(messages.viewall)}
+          </span>
+        </Link>
       )}
 
       <RemoveWatchlistItemModal

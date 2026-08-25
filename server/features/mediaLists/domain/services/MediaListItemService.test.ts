@@ -29,7 +29,7 @@ const addMovie = (
   });
 
 describe('MediaListItemService', () => {
-  it('appends items in insertion order', async () => {
+  it('reads back most-recently-added first', async () => {
     const harness = buildHarness();
     const list = await harness.seedSharedList();
 
@@ -39,11 +39,11 @@ describe('MediaListItemService', () => {
     const items = await harness.itemService.itemsOf(list.id, OWNER.id);
     assert.deepStrictEqual(
       items.map((item) => item.tmdbId),
-      [1, 2]
+      [2, 1]
     );
     assert.deepStrictEqual(
       items.map((item) => item.position),
-      [0, 1]
+      [1, 0]
     );
   });
 
@@ -246,8 +246,8 @@ describe('MediaListItemService', () => {
     it('sorts a pinned item ahead of position, most recently pinned first', async () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
-      const first = await addMovie(harness, list.id, 1);
-      await addMovie(harness, list.id, 2);
+      await addMovie(harness, list.id, 1);
+      const second = await addMovie(harness, list.id, 2);
       const third = await addMovie(harness, list.id, 3);
 
       await harness.itemService.setPinned(list.id, third.id, OWNER.id, true);
@@ -255,10 +255,10 @@ describe('MediaListItemService', () => {
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
       assert.deepStrictEqual(
         items.map((item) => item.tmdbId),
-        [3, 1, 2]
+        [3, 2, 1]
       );
-      // Unpinned items keep the manual order underneath the pin.
-      assert.strictEqual(items[1].tmdbId, first.tmdbId);
+      // Unpinned items keep the most-recently-added order underneath the pin.
+      assert.strictEqual(items[1].tmdbId, second.tmdbId);
     });
 
     it('lets a write collaborator pin', async () => {

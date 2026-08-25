@@ -468,7 +468,7 @@ describe('media list routes', () => {
       const afterUnpin = await owner.get(`/mediaLists/${list.id}/items`);
       assert.deepStrictEqual(
         afterUnpin.body.results.map((item: { tmdbId: number }) => item.tmdbId),
-        [1, 2]
+        [2, 1]
       );
       assert.strictEqual(afterUnpin.body.results[1].pinnedAt, null);
     });

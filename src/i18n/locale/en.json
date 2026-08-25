@@ -1741,6 +1741,8 @@
   "components.Watchlists.WatchlistPosterStrip.removefailed": "Something went wrong removing that title.",
   "components.Watchlists.WatchlistPosterStrip.seenfailed": "Something went wrong updating your watched state.",
   "components.Watchlists.WatchlistPosterStrip.untitled": "Title Unavailable",
+  "components.Watchlists.WatchlistPosterStrip.viewall": "View All",
+  "components.Watchlists.WatchlistPosterStrip.viewalllist": "View all of {name}",
   "components.Watchlists.WatchlistRoleBadge.canedit": "Can Edit",
   "components.Watchlists.WatchlistRoleBadge.canview": "Can View",
   "components.Watchlists.WatchlistRoleBadge.owner": "Owner",
