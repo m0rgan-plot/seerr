@@ -60,6 +60,7 @@ export const episodeKey = ({ seasonNumber, episodeNumber }: EpisodeRef) =>
   `${seasonNumber}:${episodeNumber}`;
 
 export type MediaListItemFilter = 'all' | 'unseen' | 'inprogress' | 'seen';
+export type MediaListItemSortBy = 'added' | 'title';
 
 // The media type is the authority here. Progress happens to be present for every series
 // the API returns today, but a series TMDB cannot resolve would read as a movie.

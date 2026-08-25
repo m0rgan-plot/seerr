@@ -5,7 +5,10 @@ import type {
   MediaListSummaryDto,
 } from '@app/domain/mediaLists/api/dto';
 import type { CollaboratorRole } from '@app/domain/mediaLists/models/Collaborator';
-import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
+import type {
+  MediaListItemFilter,
+  MediaListItemSortBy,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import type { MediaType } from '@server/constants/media';
 import axios from 'axios';
 
@@ -22,10 +25,23 @@ export const membershipKey = (tmdbId: number, mediaType: MediaType) =>
 export const listKey = (mediaListId: number) =>
   `${mediaListsKey}/${mediaListId}`;
 
-export const itemsKey = (mediaListId: number, filter?: MediaListItemFilter) =>
-  filter && filter !== 'all'
-    ? `${listKey(mediaListId)}/items?filter=${filter}`
-    : `${listKey(mediaListId)}/items`;
+export const itemsKey = (
+  mediaListId: number,
+  page: number,
+  filter?: MediaListItemFilter,
+  sortBy?: MediaListItemSortBy
+) => {
+  const params: Record<string, string> = { page: String(page) };
+  if (filter && filter !== 'all') {
+    params.filter = filter;
+  }
+  if (sortBy && sortBy !== 'added') {
+    params.sortBy = sortBy;
+  }
+
+  const query = new URLSearchParams(params).toString();
+  return `${listKey(mediaListId)}/items?${query}`;
+};
 
 export const progressKey = (mediaListId: number, itemId: number) =>
   `${listKey(mediaListId)}/items/${itemId}/progress`;

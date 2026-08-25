@@ -20,12 +20,16 @@ import {
   canEditItems,
   canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
-import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
+import type {
+  MediaListItemFilter,
+  MediaListItemSortBy,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import {
   isPinned,
   isSeries,
 } from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
+import useVerticalScroll from '@app/hooks/useVerticalScroll';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
 import {
@@ -62,33 +66,6 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
 
 const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'seen'];
 
-type ItemSortOption = 'added' | 'title';
-
-// Pinned titles always lead, most recently pinned first, exactly like the server order
-// this starts from -- sortBy only decides how the unpinned remainder is ordered. Without
-// this split, choosing a sort would silently undo a pin: an "added" sort by real,
-// distinct timestamps overrides the server's pinned-first order outright, which is what
-// made pinning look like it did nothing.
-const sortItems = <
-  T extends { title: string | null; createdAt: Date; pinnedAt: Date | null },
->(
-  items: T[],
-  sortBy: ItemSortOption
-): T[] => {
-  const pinned = [...items.filter((item) => item.pinnedAt !== null)].sort(
-    (a, b) => b.pinnedAt!.getTime() - a.pinnedAt!.getTime()
-  );
-  const unpinned = [...items.filter((item) => item.pinnedAt === null)].sort(
-    (a, b) => {
-      if (sortBy === 'title') {
-        return (a.title ?? '').localeCompare(b.title ?? '');
-      }
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    }
-  );
-  return [...pinned, ...unpinned];
-};
-
 const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const intl = useIntl();
   const router = useRouter();
@@ -100,14 +77,24 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const [showDelete, setShowDelete] = useState(false);
   const [trackingItemId, setTrackingItemId] = useState<number | null>(null);
   const [showShare, setShowShare] = useState(false);
-  const [sortBy, setSortBy] = useState<ItemSortOption>('added');
+  const [sortBy, setSortBy] = useState<MediaListItemSortBy>('added');
 
   const { data: list, error, isLoading } = useMediaList(mediaListId);
   const {
     data: items,
+    totalResults,
+    seenCount,
     isLoading: itemsLoading,
+    isLoadingMore,
+    isReachingEnd,
+    fetchMore,
     revalidate,
-  } = useMediaListItems(mediaListId, filter);
+  } = useMediaListItems(mediaListId, filter, sortBy);
+
+  useVerticalScroll(
+    fetchMore,
+    !itemsLoading && !isLoadingMore && !isReachingEnd
+  );
   const { setMovieWatched, setSeasonsWatched, setPinned, removeItem } =
     useMediaListMutations(mediaListId);
 
@@ -120,7 +107,6 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   }
 
   const canEdit = canEditItems(list.role);
-  const seenCount = items?.filter((item) => item.watched).length ?? 0;
   // Read back from the current items so the tracker follows a refresh rather than
   // holding the copy it was opened with.
   const trackedItem = items?.find((item) => item.id === trackingItemId) ?? null;
@@ -198,7 +184,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
             <div className="text-sm text-gray-400">
               {intl.formatMessage(messages.seenprogress, {
                 watched: seenCount,
-                total: items.length,
+                total: totalResults,
               })}
             </div>
           )}
@@ -213,7 +199,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
               className="rounded-r-only short"
               data-testid="watchlist-item-sort"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as ItemSortOption)}
+              onChange={(e) => setSortBy(e.target.value as MediaListItemSortBy)}
             >
               <option value="added">
                 {intl.formatMessage(messages.sortadded)}
@@ -231,9 +217,9 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       ) : items && items.length > 0 ? (
         <>
           <ul className="cards-vertical">
-            {/* Default is newest added first. Watching an item never touches createdAt,
-                so ticking one off doesn't reshuffle the grid. */}
-            {sortItems(items, sortBy).map((item) => (
+            {/* Server-sorted: pinned first, then by sortBy. Watching an item never
+                changes its position, so ticking one off doesn't reshuffle the grid. */}
+            {items.map((item) => (
               <li key={item.id}>
                 <WatchlistItemCard
                   item={item}
@@ -297,6 +283,12 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
               </li>
             ))}
           </ul>
+
+          {isLoadingMore && !isReachingEnd && (
+            <div className="mt-4">
+              <LoadingSpinner />
+            </div>
+          )}
 
           {/* Below the grid rather than inside it: the columns are laid out by auto-fill
               now, and a full-width row in the middle would leave a hole beside it. */}

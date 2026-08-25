@@ -5,6 +5,8 @@ import { toHttpError } from '@server/features/mediaLists/presentation/routes/err
 import {
   addMediaListItemSchema,
   itemFilterSchema,
+  itemPageSchema,
+  itemSortBySchema,
   listIdParam,
   reorderMediaListSchema,
 } from '@server/features/mediaLists/presentation/schemas/mediaListSchemas';
@@ -21,24 +23,36 @@ router.get('/', async (req, res, next) => {
   try {
     const listId = listIdParam.parse(params(req).mediaListId);
     const filter = itemFilterSchema.parse(req.query.filter ?? 'all');
+    const sortBy = itemSortBySchema.parse(req.query.sortBy ?? 'added');
+    const page = itemPageSchema.parse(req.query.page ?? 1);
     const { views } = getMediaListServices();
 
-    const items = await views.itemViewsFor(listId, req.user!.id, filter);
+    const itemPage = await views.itemViewsFor(
+      listId,
+      req.user!.id,
+      filter,
+      sortBy,
+      page
+    );
     const members = await views.membersFor(listId);
 
     // Resolving the seen-by ids once for the whole page rather than per item.
     const byId = new Map(members.map((member) => [member.id, member]));
 
-    return res.status(200).json(
-      items.map((view) =>
+    return res.status(200).json({
+      page: itemPage.page,
+      totalResults: itemPage.totalResults,
+      totalPages: itemPage.totalPages,
+      seenCount: itemPage.seenCount,
+      results: itemPage.results.map((view) =>
         toMediaListItemDto(
           view,
           view.seenByUserIds
             .map((userId) => byId.get(userId))
             .filter((member): member is NonNullable<typeof member> => !!member)
         )
-      )
-    );
+      ),
+    });
   } catch (error) {
     return next(toHttpError(error));
   }

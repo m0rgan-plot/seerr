@@ -8,9 +8,30 @@ export interface AddMediaListItemInput {
   addedById: number;
 }
 
+export interface FindPageInListOptions {
+  // Omitted together to fetch every item in the list, still pinned-first/newest-first --
+  // itemViewsFor needs the full set when it has to filter by computed watch state or
+  // sort by title (TMDB-resolved, not a DB column) before paginating in memory.
+  skip?: number;
+  take?: number;
+}
+
+export interface MediaListItemPage {
+  items: MediaListItem[];
+  total: number;
+}
+
 export interface MediaListItemRepository {
   findById(itemId: number): Promise<MediaListItem | null>;
   findByList(listId: number): Promise<MediaListItem[]>;
+  // Same order as findByList (pinned first, most recently pinned first, then the
+  // unpinned tail by position ascending), with an optional skip/take window -- the
+  // one order a SQL query can express here, since title sorting depends on a
+  // TMDB-resolved summary the DB never stores.
+  findPageInList(
+    listId: number,
+    options: FindPageInListOptions
+  ): Promise<MediaListItemPage>;
   findInList(
     listId: number,
     tmdbId: number,

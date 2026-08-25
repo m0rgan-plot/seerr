@@ -8,6 +8,8 @@ import type { TvMetadataProvider } from '@server/features/mediaLists/domain/port
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type {
   AddMediaListItemInput,
+  FindPageInListOptions,
+  MediaListItemPage,
   MediaListItemRepository,
 } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
 import type {
@@ -124,6 +126,33 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
         }
         return a.position - b.position;
       });
+  }
+
+  async findPageInList(
+    listId: number,
+    { skip = 0, take }: FindPageInListOptions
+  ): Promise<MediaListItemPage> {
+    // Mirrors the TypeORM repository: same order as findByList, pinned items lead
+    // (most recently pinned first), then everything unpinned by position ascending.
+    const ordered = this.items
+      .filter((item) => item.listId === listId)
+      .sort((a, b) => {
+        if (!!a.pinnedAt !== !!b.pinnedAt) {
+          return a.pinnedAt ? -1 : 1;
+        }
+        if (a.pinnedAt && b.pinnedAt) {
+          return b.pinnedAt.getTime() - a.pinnedAt.getTime();
+        }
+        return a.position - b.position;
+      });
+
+    return {
+      items:
+        take === undefined
+          ? ordered.slice(skip)
+          : ordered.slice(skip, skip + take),
+      total: ordered.length,
+    };
   }
 
   async findInList(

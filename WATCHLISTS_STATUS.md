@@ -23,6 +23,7 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 11 | Pin an item: `pinnedAt` column + migrations, domain/data/presentation backend, frontend domain + data layer. Presentation UI deferred to a `/design` pass | ✅ |
 | 12 | Pin presentation UI: `WatchlistPinToggle`, merged pin/watched badge+button into one toggle picto on both the grid card and the poster strip, Remove relocated to the bottom action bar, Cypress coverage | ✅ |
 | 13 | Pin/polish feedback round: live reorder-on-pin fix, hover states, bigger toggles, added-date moved detail-only, title/year on the shelf strip, compact Request button, pin always visible with a new pin glyph, status dot removed from the shelf, `seenBy` line removed, Dropdown ghost-item purple fixed | ✅ |
+| 14 | Paginate the detail page's item list: `findPageInList` (SQL pagination when `filter=all`, in-memory page-after-filter/sort otherwise), `sortBy=title` moved server-side, `useSWRInfinite` + scroll-triggered fetch on `WatchlistDetail`, `seenCount` returned separately from the page since it must span the whole list, `seerr-api.yml` + supertest + unit test coverage. Plan: `~/.claude/plans/melodic-percolating-marshmallow.md` | ✅ |
 
 ## Decisions log
 
@@ -120,6 +121,23 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   it has no reason to also carry their names.
 - **2026-08-15** — Known nit: toggling an episode scrolls the detail page back to the top,
   because the item list re-renders on revalidation. Worth a look when the reorder design lands.
+
+- **2026-08-25** — Title sort cannot move into SQL: `Media` has no `title` column (it is always
+  resolved live from TMDB). `findPageInList` only pages the pinned-first / position-ascending
+  order; a `sortBy=title` or non-`all` filter request falls back to resolving the whole list once
+  and paging the in-memory result, since watched-state filtering already depended on data
+  (episode/season progress) no SQL WHERE clause can express either.
+- **2026-08-25** — Reverted an initial choice to make the default page order newest-added-first.
+  `/reorder` and `position` are a real, tested v1 feature (see the 2026-08-14 decision above), and
+  `GET /items` with no `sortBy` is its only observable order today (no drag affordance exists in
+  the UI yet). Flipping the default direction would have silently broken that contract to match a
+  client-side preference (`WatchlistDetail`'s now-removed local `sortItems`) that was never
+  reconciled with reorder in the first place. Default order stays pinned-first, then position
+  ascending, exactly matching `findByList`.
+- **2026-08-25** — `seenCount` is returned separately from the item page, computed over the whole
+  list (via a `withSummaries: false` pass, no TMDB calls) rather than derived from the loaded
+  items client-side. Once the item list pages, `items.length` on the client no longer means "every
+  item," so the "seen N of M" line would otherwise undercount M as soon as a second page exists.
 
 ## Milestone 1 verification (2026-08-14)
 

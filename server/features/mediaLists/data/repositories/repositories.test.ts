@@ -341,6 +341,51 @@ describe('media list repositories', () => {
       assert.strictEqual(afterUnpin[1].pinnedAt, null);
     });
 
+    it('pages the pinned-first, position-ascending order', async () => {
+      const { list, owner } = await seedList();
+      await items.add({
+        listId: list.id,
+        tmdbId: 1,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      await items.add({
+        listId: list.id,
+        tmdbId: 2,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const third = await items.add({
+        listId: list.id,
+        tmdbId: 3,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+
+      // Pinning the newest item should still put it first, ahead of earlier adds.
+      await items.pin(third.id);
+
+      const firstPage = await items.findPageInList(list.id, {
+        skip: 0,
+        take: 2,
+      });
+      const secondPage = await items.findPageInList(list.id, {
+        skip: 2,
+        take: 2,
+      });
+
+      assert.strictEqual(firstPage.total, 3);
+      assert.deepStrictEqual(
+        firstPage.items.map((item) => item.tmdbId),
+        [3, 1]
+      );
+      assert.strictEqual(secondPage.total, 3);
+      assert.deepStrictEqual(
+        secondPage.items.map((item) => item.tmdbId),
+        [2]
+      );
+    });
+
     it('will not reorder an item belonging to a different list', async () => {
       const { list, owner } = await seedList();
       const other = await lists.create({

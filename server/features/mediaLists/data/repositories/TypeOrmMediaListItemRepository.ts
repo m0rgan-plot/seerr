@@ -10,6 +10,8 @@ import type { MediaListItem } from '@server/features/mediaLists/domain/entities/
 import { DuplicateMediaListItemError } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type {
   AddMediaListItemInput,
+  FindPageInListOptions,
+  MediaListItemPage,
   MediaListItemRepository,
 } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
 
@@ -40,6 +42,49 @@ export class TypeOrmMediaListItemRepository implements MediaListItemRepository {
       .addOrderBy('item.id', 'ASC')
       .getMany();
     return records.map((record) => toMediaListItem(record, listId));
+  }
+
+  public async findPageInList(
+    listId: number,
+    { skip, take }: FindPageInListOptions
+  ): Promise<MediaListItemPage> {
+    // getManyAndCount() can't build its count subquery around the raw CASE expression
+    // below (TypeORM fails to resolve its alias there), so the total is a separate,
+    // order-free count query rather than one combined call.
+    const base = () =>
+      getRepository(MediaListItemRecord)
+        .createQueryBuilder('item')
+        .where('item.listId = :listId', { listId });
+
+    const total = await base().getCount();
+
+    // Same order as findByList: pinned leads, most recently pinned first, then the
+    // unpinned tail by position ascending -- manual reorder's own order, which this
+    // has to keep respecting since /reorder is a real, tested v1 feature (see
+    // WATCHLISTS_STATUS.md), not something this pagination pass gets to redefine. The
+    // CASE has to be a named, selected column (not an inline ORDER BY expression)
+    // because skip/take combined with the joins below routes through TypeORM's
+    // raw-query pagination path, which cannot resolve an inline expression's alias
+    // there.
+    const records = await base()
+      .leftJoinAndSelect('item.addedBy', 'addedBy')
+      .leftJoinAndSelect('item.media', 'media')
+      .addSelect(
+        'CASE WHEN item.pinnedAt IS NULL THEN 1 ELSE 0 END',
+        'pinned_order'
+      )
+      .orderBy('pinned_order', 'ASC')
+      .addOrderBy('item.pinnedAt', 'DESC')
+      .addOrderBy('item.position', 'ASC')
+      .addOrderBy('item.id', 'ASC')
+      .skip(skip)
+      .take(take)
+      .getMany();
+
+    return {
+      items: records.map((record) => toMediaListItem(record, listId)),
+      total,
+    };
   }
 
   public async findInList(

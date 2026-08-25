@@ -364,11 +364,12 @@ describe('media list routes', () => {
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
 
       assert.strictEqual(listed.status, 200);
-      assert.strictEqual(listed.body.length, 1);
-      assert.strictEqual(listed.body[0].tmdbId, 693134);
-      assert.strictEqual(listed.body[0].watched, false);
-      assert.strictEqual(listed.body[0].progress, null);
-      assert.deepStrictEqual(listed.body[0].seenBy, []);
+      assert.strictEqual(listed.body.results.length, 1);
+      assert.strictEqual(listed.body.totalResults, 1);
+      assert.strictEqual(listed.body.results[0].tmdbId, 693134);
+      assert.strictEqual(listed.body.results[0].watched, false);
+      assert.strictEqual(listed.body.results[0].progress, null);
+      assert.deepStrictEqual(listed.body.results[0].seenBy, []);
 
       assert.strictEqual(
         (await owner.delete(`/mediaLists/${list.id}/items/${item.id}`)).status,
@@ -436,7 +437,7 @@ describe('media list routes', () => {
 
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
       assert.deepStrictEqual(
-        listed.body.map((item: { tmdbId: number }) => item.tmdbId),
+        listed.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [2, 1]
       );
     });
@@ -454,10 +455,10 @@ describe('media list routes', () => {
 
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
       assert.deepStrictEqual(
-        listed.body.map((item: { tmdbId: number }) => item.tmdbId),
+        listed.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [2, 1]
       );
-      assert.ok(listed.body[0].pinnedAt);
+      assert.ok(listed.body.results[0].pinnedAt);
 
       const unpinned = await owner.delete(
         `/mediaLists/${list.id}/items/${second.id}/pinned`
@@ -466,10 +467,10 @@ describe('media list routes', () => {
 
       const afterUnpin = await owner.get(`/mediaLists/${list.id}/items`);
       assert.deepStrictEqual(
-        afterUnpin.body.map((item: { tmdbId: number }) => item.tmdbId),
+        afterUnpin.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [1, 2]
       );
-      assert.strictEqual(afterUnpin.body[1].pinnedAt, null);
+      assert.strictEqual(afterUnpin.body.results[1].pinnedAt, null);
     });
 
     it('refuses a read collaborator pinning', async () => {
@@ -506,11 +507,14 @@ describe('media list routes', () => {
       const forFriend = await friend.get(`/mediaLists/${list.id}/items`);
       const forOwner = await owner.get(`/mediaLists/${list.id}/items`);
 
-      assert.strictEqual(forFriend.body[0].watched, true);
-      assert.strictEqual(forOwner.body[0].watched, false);
+      assert.strictEqual(forFriend.body.results[0].watched, true);
+      assert.strictEqual(forOwner.body.results[0].watched, false);
       // The owner sees who has finished it.
-      assert.strictEqual(forOwner.body[0].seenBy.length, 1);
-      assert.strictEqual(forOwner.body[0].seenBy[0].id, await friendId());
+      assert.strictEqual(forOwner.body.results[0].seenBy.length, 1);
+      assert.strictEqual(
+        forOwner.body.results[0].seenBy[0].id,
+        await friendId()
+      );
     });
 
     // The owner holds no collaborator row, so resolving seen-by against the collaborator
@@ -528,7 +532,9 @@ describe('media list routes', () => {
       const forFriend = await friend.get(`/mediaLists/${list.id}/items`);
 
       assert.deepStrictEqual(
-        forFriend.body[0].seenBy.map((member: { id: number }) => member.id),
+        forFriend.body.results[0].seenBy.map(
+          (member: { id: number }) => member.id
+        ),
         [await ownerId()]
       );
     });
@@ -545,7 +551,7 @@ describe('media list routes', () => {
 
       assert.strictEqual(cleared.status, 204);
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
-      assert.strictEqual(listed.body[0].watched, false);
+      assert.strictEqual(listed.body.results[0].watched, false);
     });
 
     it('refuses the movie action on a series', async () => {
@@ -588,11 +594,11 @@ describe('media list routes', () => {
       );
 
       assert.deepStrictEqual(
-        seen.body.map((item: { tmdbId: number }) => item.tmdbId),
+        seen.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [2]
       );
       assert.deepStrictEqual(
-        unseen.body.map((item: { tmdbId: number }) => item.tmdbId),
+        unseen.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [1]
       );
     });
