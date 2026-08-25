@@ -19,6 +19,7 @@ export interface MediaListRef {
   title: string | null;
   // Relative TMDB path, or null when there is no art for the title.
   posterPath: string | null;
+  year: number | null;
   // The signed-in member's own state, so hover CTAs know which action to offer.
   watched: boolean;
   // Availability in the library, which decides what the request CTA says.
@@ -26,6 +27,9 @@ export interface MediaListRef {
   createdAt: Date;
   // Null once the person who added it is deleted. The item stays.
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Pinned titles lead the strip,
+  // most recently pinned first, ahead of anything unpinned.
+  pinnedAt: Date | null;
 }
 
 export interface MediaList {

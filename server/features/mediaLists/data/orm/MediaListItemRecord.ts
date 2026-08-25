@@ -46,6 +46,11 @@ export class MediaListItemRecord {
   @Column({ type: 'int', default: 0 })
   public position: number;
 
+  // Null unless pinned. Non-null sorts a title to the top of the list ahead of
+  // `position`, and its value is the tie-breaker between more than one pinned item.
+  @DbAwareColumn({ type: 'datetime', nullable: true })
+  public pinnedAt: Date | null;
+
   // Null once the adding user is deleted. The item itself stays in the list.
   @ManyToOne(() => User, {
     onDelete: 'SET NULL',

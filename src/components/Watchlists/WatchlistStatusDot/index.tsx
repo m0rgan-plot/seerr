@@ -12,7 +12,7 @@ const WatchlistStatusDot = ({ status }: { status: MediaStatus }) => {
 
   return (
     <span
-      className={`block h-2.5 w-2.5 rounded-full ring-1 ring-black/40 ${dotClass}`}
+      className={`block h-2.5 w-2.5 rounded-full shadow ring-1 ring-black/70 ${dotClass}`}
     />
   );
 };

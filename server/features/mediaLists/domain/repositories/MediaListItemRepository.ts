@@ -22,6 +22,10 @@ export interface MediaListItemRepository {
   remove(itemId: number): Promise<void>;
   // Applies the given order as a single unit so a failure cannot leave gaps.
   applyOrder(listId: number, orderedItemIds: number[]): Promise<void>;
+  // Stamps or clears pinnedAt. Pinning again refreshes the timestamp, which is what
+  // keeps the most recently pinned title ahead of one pinned earlier.
+  pin(itemId: number): Promise<void>;
+  unpin(itemId: number): Promise<void>;
   // Which of the given lists already hold this title, and the item id on each one, for
   // the media page's "already on this list" check -- the item id is what lets that
   // button remove the title again without a second lookup. Scoped to a candidate set

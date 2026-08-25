@@ -225,6 +225,81 @@ describe('MediaListItemService', () => {
     });
   });
 
+  describe('pin', () => {
+    it('pins and unpins an item', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      const item = await addMovie(harness, list.id, 1);
+
+      await harness.itemService.setPinned(list.id, item.id, OWNER.id, true);
+      assert.ok(
+        (await harness.itemService.itemsOf(list.id, OWNER.id))[0].pinnedAt
+      );
+
+      await harness.itemService.setPinned(list.id, item.id, OWNER.id, false);
+      assert.strictEqual(
+        (await harness.itemService.itemsOf(list.id, OWNER.id))[0].pinnedAt,
+        null
+      );
+    });
+
+    it('sorts a pinned item ahead of position, most recently pinned first', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      const first = await addMovie(harness, list.id, 1);
+      await addMovie(harness, list.id, 2);
+      const third = await addMovie(harness, list.id, 3);
+
+      await harness.itemService.setPinned(list.id, third.id, OWNER.id, true);
+
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      assert.deepStrictEqual(
+        items.map((item) => item.tmdbId),
+        [3, 1, 2]
+      );
+      // Unpinned items keep the manual order underneath the pin.
+      assert.strictEqual(items[1].tmdbId, first.tmdbId);
+    });
+
+    it('lets a write collaborator pin', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      const item = await addMovie(harness, list.id, 1);
+
+      await harness.itemService.setPinned(list.id, item.id, WRITER.id, true);
+
+      assert.ok(
+        (await harness.itemService.itemsOf(list.id, OWNER.id))[0].pinnedAt
+      );
+    });
+
+    it('refuses a read-only collaborator', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      const item = await addMovie(harness, list.id, 1);
+
+      await assert.rejects(
+        () => harness.itemService.setPinned(list.id, item.id, READER.id, true),
+        MediaListAccessDeniedError
+      );
+    });
+
+    it('refuses to pin an item that belongs to another list', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      const other = await harness.listService.create({
+        name: 'Other',
+        ownerId: OWNER.id,
+      });
+      const item = await addMovie(harness, other.id, 1);
+
+      await assert.rejects(
+        () => harness.itemService.setPinned(list.id, item.id, OWNER.id, true),
+        ItemNotFoundInListError
+      );
+    });
+  });
+
   describe('itemsContaining', () => {
     it('reports own and shared lists that already hold the title, with the item id', async () => {
       const harness = buildHarness();

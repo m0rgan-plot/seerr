@@ -20,6 +20,9 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 8 | Episode tracking: inline accordion, season rows, episode checklist (1e) | ✅ |
 | 9 | Collaboration: `ShareWatchlistModal`, `CollaboratorList`, role-gated UI, both notification types registered (1h) | ✅ |
 | 10 | Cypress spec + `pnpm i18n:extract` | ✅ |
+| 11 | Pin an item: `pinnedAt` column + migrations, domain/data/presentation backend, frontend domain + data layer. Presentation UI deferred to a `/design` pass | ✅ |
+| 12 | Pin presentation UI: `WatchlistPinToggle`, merged pin/watched badge+button into one toggle picto on both the grid card and the poster strip, Remove relocated to the bottom action bar, Cypress coverage | ✅ |
+| 13 | Pin/polish feedback round: live reorder-on-pin fix, hover states, bigger toggles, added-date moved detail-only, title/year on the shelf strip, compact Request button, pin always visible with a new pin glyph, status dot removed from the shelf, `seenBy` line removed, Dropdown ghost-item purple fixed | ✅ |
 
 ## Decisions log
 
@@ -381,3 +384,157 @@ to the array `summariesFor` already builds, no new query -- the owner is already
 self-exclusion now removes the owner entry instead of nothing, netting the same displayed avatars as
 before. Route and service tests updated/added for both endpoints; the Cypress case now checks the
 shelf row before the detail page in one test rather than two.
+
+## Pin an item to the top of a list (2026-08-24)
+
+Branch `feat/media-lists-pin`, off `feat/media-lists-collaboration-and-polish`. Backend and frontend
+domain/data layers only — no UI. Presentation goes through `/design` before it's implemented.
+
+- **Storage is a nullable `pinnedAt` timestamp on `media_list_item`**, not a boolean, so the same value
+  doubles as the tie-breaker when more than one item is pinned (pinning again refreshes it, which is
+  what keeps the most recently pinned item ahead of one pinned earlier). New sqlite/postgres migrations
+  (`AddMediaListItemPinnedAt`) match the `AddMediaListDeletedAt` pattern; verified by running the sqlite
+  migration chain end to end against a scratch db and inspecting `pinnedAt`'s resulting column info.
+- **Pin is list-level, not per-user**, unlike watched state: everyone with access sees the same pinned
+  titles in the same order. Gated by the existing `editListItems` permission (same as add/remove/reorder),
+  so the route lives in `mediaListItemRoutes.ts` as `POST`/`DELETE /items/:itemId/pinned`, not in
+  `mediaListWatchRoutes.ts`, which is deliberately reachable by read-only collaborators for their own
+  state.
+- **Ordering is pinned-first, most recently pinned first, then the existing manual `position` order**,
+  both on the detail page (`MediaListItemRepository.findByList`) and the shelf preview
+  (`MediaListViewService.summariesFor`'s recency sort). NULL ordering isn't consistent between sqlite and
+  postgres (DESC sorts NULLs first vs. last by driver default), so the repository query spells out
+  `CASE WHEN pinnedAt IS NULL THEN 1 ELSE 0 END` instead of relying on either driver's default.
+- **No notification and no list `touch()` on pin/unpin.** Reorder doesn't bump the list's `updatedAt`
+  either (see the "Index sort" fix above, which only covers add/remove), so pin follows that precedent
+  rather than add()'s.
+- Verification: full server suite (412 tests) green, `tsc`/`eslint`/`prettier` clean on both server and
+  client, sqlite migration chain runs clean from a scratch db.
+
+## Pin presentation UI (2026-08-24)
+
+Explored the pin badge with `/design` first (three directions: badge, corner ribbon, bare icon on
+poster — see the published mockup). Mid-review the user caught a real problem in that first pass: the
+pin badge and the pin action button were two separate elements showing the same picto at once once an
+item was both pinned and hovered, and the existing "watched" badge/button had the identical duplication
+already living in the shipped code. Asked to fix both together and reorganize where Remove goes.
+
+- **One picto per state, and it doubles as the toggle**, everywhere pin or watched appears: filled and
+  always visible once true (so a pinned or watched title is still recognizable without hovering
+  anything — that requirement is why the plain badge couldn't just become hover-only), a quiet gray
+  outline of the same glyph that only appears on reveal otherwise, no second button anywhere restating
+  it. New `WatchlistPinToggle` component (bookmark outline/solid from `@heroicons/react`, since Heroicons
+  has no thumbtack icon) is shared between the grid card and the poster strip; the watched toggle is
+  inlined per component instead, since it already differed between the two (and the poster strip has no
+  quick toggle for TV completion, just like the grid does) -- extracting it would have forced one shape
+  onto two different reveal mechanisms for no shared benefit.
+- **TV completion stays a passive, non-interactive badge**, never a toggle, on both the grid card and the
+  strip: the app has no single-tap "mark this whole series watched" today (only per-episode, via the
+  episode tracker), so nothing was invented there. Only a movie's watched picto is a toggle; a series'
+  pin picto still is, since pinning isn't per-episode.
+- **Two reveal mechanisms, not one.** The grid card already drives its hover reveal off React state
+  (`showDetail`, since touch needs a tap-then-navigate-on-second-tap sequence a CSS `:hover` can't
+  express) -- `WatchlistPinToggle`'s `revealed` prop plugs into that directly. The poster strip instead
+  reveals off a real `:hover` on a `group` ancestor for a mouse (cheap, no state needed) plus a `tapped`
+  boolean for touch, so the component grew a `revealOnGroupHover` flag that layers `group-hover:` classes
+  on top of `revealed` rather than replacing it.
+- **Remove moved into the bottom action bar** (next to Episodes and Request on the grid card; next to
+  Request on the poster strip), now that the top corners are reserved purely for state (type, pin,
+  watched) rather than a mix of state and actions. This was the harder half of the ask -- previously
+  Remove lived in the same hover-revealed column as the now-removed pin/seen buttons.
+- **Cypress fallout**: two existing assertions queried `watchlist-item-seen` as a separate element after
+  clicking `watchlist-item-seen-toggle` -- both testids now point at the one merged element, so they
+  assert `aria-pressed` on it instead. Added a case that pins and unpins a title on the detail page and
+  checks the list re-sorts each time, and folded a "no pin picto for a read-only collaborator" check into
+  the existing sharing test rather than duplicating its setup in a new one.
+- Verified live in a browser, not just typechecked: seeded a throwaway list via the API against a
+  freshly `cypress:prepare`'d dev server, logged in as the seeded admin, and clicked through pin/unpin
+  and mark-seen on both the detail grid and the shelf strip. Caught one real bug this way that neither
+  `tsc` nor `eslint` could have: the poster strip's "Added &lt;date&gt;" label shares the hover overlay's
+  top-left corner with the new pin chip and collided with it once the chip stopped being conditional on
+  `item.watched` -- fixed with `mt-5` on the label's row to clear the chip.
+- Verification: `tsc`/`eslint`/`prettier` clean on the client, `pnpm i18n:extract` picked up the new
+  `WatchlistPinToggle.pin`/`.unpin` and `pinfailed` keys.
+
+## Pin/polish feedback round (2026-08-24)
+
+Direct feedback on the shipped pin feature, then a second round of feedback mid-fix. Both addressed on
+the same branch.
+
+- **Root cause of "pinning doesn't move the item up": `WatchlistDetail`'s client-side `sortItems` ignored
+  `pinnedAt` entirely.** The backend already returns pinned-first order, but the "Added Date"/"Title" sort
+  the detail page applies on top of that re-sorts the *whole* array by the chosen criterion, discarding the
+  server's pinned-first grouping outright. The existing Cypress pin test happened to keep passing through
+  this bug because both seeded titles landed in the same second -- sqlite's `CURRENT_TIMESTAMP` is
+  second-resolution -- so the "added" comparator's tie let `Array.sort`'s stability silently preserve the
+  server's order. Fixed by splitting `sortItems` into a pinned group (sorted by `pinnedAt` desc, always
+  first) and an unpinned group (sorted by whatever the user picked), concatenated. Cypress now also checks
+  the pin survives switching to the "Title" sort, which the timestamp tie could never have caught.
+- **Hover states and size**: `WatchlistPinToggle`'s pinned (amber) branch and the movie watched-toggle's
+  watched (green) branch had no `hover:` classes at all -- only the unpinned/unwatched gray branch did.
+  Added `hover:border-*-300 hover:bg-*-400` to both. Bumped both toggles up one notch: grid 20px→24px,
+  strip 17px→20px (and their icons proportionally), matching sizes between the pin toggle and the
+  seen-toggle/passive-badge in the same corner.
+- **Added-date moved from the shelf to the detail page.** The poster strip's hover overlay showed
+  "Added &lt;date&gt; [by &lt;name&gt;]"; the detail grid card showed nothing. Posters are small on the
+  shelf, so that line now lives only on `WatchlistItemCard` (added `useUser`/`Avatar`, mirroring what the
+  strip used to do), and the shelf strip shows title + year instead -- previously absent from
+  `MediaListPreviewItem` entirely, so `year` was added end-to-end: `MediaListViewService.buildPreview`,
+  the `MediaListPreviewItem` wire type, `toMediaListSummaryDto`, `seerr-api.yml`, the frontend `MediaListRef`
+  model and `toMediaListSummary` mapper. Sized to match the same year-then-title treatment used everywhere
+  else a poster overlay shows a title (`TitleCard`, the detail grid card) after an initial pass with small
+  inline text read as inconsistent with the rest of the app.
+- **Request button is icon-only on the shelf strip.** A tile only has room for one primary action's label
+  now that Remove sits beside it; `WatchlistRequestButton` grew a `compact` prop (icon + `Tooltip`, no
+  `<span>` label), passed only from `WatchlistPosterStrip`. The detail grid card keeps the labelled button.
+- **Second round, mid-fix**: pin bookmark always visible rather than reveal-gated (`WatchlistPinToggle`
+  lost its `revealed`/`revealOnGroupHover` props entirely -- a pin is something to notice and reach for,
+  not just confirm after already hovering); swapped the Heroicons bookmark for an inlined pushpin SVG
+  (heroicons has no thumbtack, so this is a raw `<path>` from svgrepo's "office pin", colored via
+  `currentColor` so the existing amber/gray classes still apply to one shape instead of two icon
+  components); dropped the "N other member(s) has seen this" line from the detail card entirely; removed
+  the passive status dot from the shelf strip (kept on the detail card); and fixed `Dropdown.Item`'s
+  `ghost` variant, which rendered a solid indigo-to-purple gradient on hover -- nobody had ever opted into
+  it before (`AddToWatchlistButton` was the first `ghost` caller), so it was dead, wrong code. Changed to
+  a plain `hover:bg-gray-700` matching the ghost container's own dark/gray look, and `AddToWatchlistButton`
+  now passes `buttonType="ghost"` on its `Dropdown.Item`s.
+- Verification: full server suite (415 tests) green, `tsc`/`eslint`/`prettier` clean on both projects,
+  `pnpm i18n:extract` dropped `WatchlistItemCard.seenbyothers` and moved the `addedon`/`addedby` keys from
+  `WatchlistPosterStrip` to `WatchlistItemCard`. Cypress `watchlists.cy.ts` run green (12/12) against a
+  restarted dev server -- the first run hit an unrelated stale-turbopack 404 on the detail route after a
+  long-lived dev server had absorbed several `nodemon` restarts from earlier `seerr-api.yml` edits;
+  restarting `pnpm dev` fixed it and confirmed nothing in this change touched routing. Also checked live in
+  a browser: pinning a title now visibly reorders it to the front immediately, even under "Title" sort;
+  the shelf strip shows title/year and no date/avatar; the detail card shows the added-date/avatar and no
+  "other member" line; the pin glyph is the new pushpin, always visible, amber when pinned; and the "Add to
+  Watchlist" dropdown on a media page no longer shows a purple row.
+
+**Third round, same day**: the shelf strip's status dot went back and forth once more once the reasoning
+behind it was made explicit -- "remove the status badge" turned out to mean the *big* labelled pill
+(`WatchlistRequestButton`'s `Badge`, which already only ever showed on `!requestable`), not the little dot.
+Reverted the dot's removal and gave it back its old bottom-right spot, hover-faded the same way it always
+was so it still yields that corner to Remove/Request on reveal, but now wrapped in a `Tooltip` +
+`WatchlistStatusLegend` (it never had one before, since the badge's own tooltip was the only way to reach
+the legend). `WatchlistRequestButton` gained a `compact`-gated condition so the big pill only ever renders
+on the detail page now; the strip relies on the dot alone.
+
+- **Shelf row is a single click target to the list.** `WatchlistShelf`'s outer container is now
+  `role="link"`/`tabIndex`/`onClick` → `router.push`, styled with a hover background, rather than only the
+  title text being a `Link`. Everything nested that already has its own destination -- the title link
+  itself, the Share/Edit buttons, the shared-with avatars' profile links, and the entire poster strip (its
+  own item links, pin/watched toggles, Remove, Request, the Add tile) -- stops the click from bubbling to
+  the row via `e.stopPropagation()` on a wrapping element, so its own action wins instead of also
+  navigating to the list. Three of those wrappers needed `eslint-disable-next-line` for
+  `jsx-a11y/no-static-element-interactions` + `jsx-a11y/click-events-have-key-events`, matching the same
+  disable already used for an identical propagation-guard div in `SlideOver`.
+- **Pin icon shrunk within its (still enlarged) button** -- grid 14px→12px, strip 12px→10px -- the button
+  itself stayed at the bumped size from the first round.
+- **"Add to Watchlist" tooltip no longer lingers over the opened dropdown items.** The app's `Tooltip`
+  tracks hover across its whole wrapped subtree, and the items list renders as a sibling of the trigger
+  button inside that same wrapped `<div>`, so hovering the list kept the tooltip up. Replaced it with a
+  native `title` attribute passed straight through `Dropdown`'s prop spread onto `Menu.Button` -- scoped to
+  the button element only, which is what the custom Tooltip could not offer here.
+- Verification: `tsc`/`eslint`/`prettier` clean on the client. Checked live in a browser: the shelf row
+  navigates to the list from empty space but a poster click still goes to the title's own page and Share
+  still opens its modal in place; the pin badge's glyph is visibly smaller inside the same-size button; and
+  the status dot with its legend tooltip is back on the strip, unchanged on the detail page.

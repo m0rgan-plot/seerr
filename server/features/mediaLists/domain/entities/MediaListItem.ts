@@ -13,6 +13,10 @@ export interface MediaListItem {
   status: MediaStatus | null;
   // Null once the person who added it is deleted. The item stays.
   addedBy: UserRef | null;
+  // When the item was pinned, or null when it isn't. Shared across every member, unlike
+  // watched state: pinning is "bring this to the top of the next watch session", not a
+  // personal marker. The timestamp itself breaks ties when more than one item is pinned.
+  pinnedAt: Date | null;
   createdAt: Date;
   // Bumped only by adding the item or reordering the list; a member's own watched
   // state lives in a separate table and never touches this row. That is what makes

@@ -91,6 +91,36 @@ router.post('/reorder', async (req, res, next) => {
   }
 });
 
+// Pinning edits the shared list, unlike the per-member /watched routes, so it stays
+// behind editListItems rather than the read-only-friendly track-progress check.
+router.post('/:itemId/pinned', async (req, res, next) => {
+  try {
+    const listId = listIdParam.parse(params(req).mediaListId);
+    const itemId = listIdParam.parse(params(req).itemId);
+    const { items } = getMediaListServices();
+
+    await items.setPinned(listId, itemId, req.user!.id, true);
+
+    return res.status(204).send();
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+router.delete('/:itemId/pinned', async (req, res, next) => {
+  try {
+    const listId = listIdParam.parse(params(req).mediaListId);
+    const itemId = listIdParam.parse(params(req).itemId);
+    const { items } = getMediaListServices();
+
+    await items.setPinned(listId, itemId, req.user!.id, false);
+
+    return res.status(204).send();
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
 router.delete('/:itemId', async (req, res, next) => {
   try {
     const listId = listIdParam.parse(params(req).mediaListId);

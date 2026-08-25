@@ -111,9 +111,19 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
   }
 
   async findByList(listId: number): Promise<MediaListItem[]> {
+    // Mirrors the TypeORM repository: pinned items lead, most recently pinned first,
+    // ahead of everything unpinned in position order.
     return this.items
       .filter((item) => item.listId === listId)
-      .sort((a, b) => a.position - b.position);
+      .sort((a, b) => {
+        if (!!a.pinnedAt !== !!b.pinnedAt) {
+          return a.pinnedAt ? -1 : 1;
+        }
+        if (a.pinnedAt && b.pinnedAt) {
+          return b.pinnedAt.getTime() - a.pinnedAt.getTime();
+        }
+        return a.position - b.position;
+      });
   }
 
   async findInList(
@@ -142,6 +152,7 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
       // Nothing has requested a title the moment it is put on a list.
       status: null,
       addedBy: this.users.get(input.addedById) ?? user(input.addedById),
+      pinnedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -151,6 +162,20 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
 
   async remove(itemId: number): Promise<void> {
     this.items = this.items.filter((item) => item.id !== itemId);
+  }
+
+  async pin(itemId: number): Promise<void> {
+    const item = this.items.find((candidate) => candidate.id === itemId);
+    if (item) {
+      item.pinnedAt = new Date();
+    }
+  }
+
+  async unpin(itemId: number): Promise<void> {
+    const item = this.items.find((candidate) => candidate.id === itemId);
+    if (item) {
+      item.pinnedAt = null;
+    }
   }
 
   async applyOrder(listId: number, orderedItemIds: number[]): Promise<void> {

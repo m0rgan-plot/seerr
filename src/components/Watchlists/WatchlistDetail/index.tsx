@@ -21,7 +21,10 @@ import {
   canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
 import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
-import { isSeries } from '@app/domain/mediaLists/models/MediaListItem';
+import {
+  isPinned,
+  isSeries,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
@@ -52,6 +55,7 @@ const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
   seenfailed: 'Something went wrong updating your watched state.',
+  pinfailed: 'Something went wrong updating that pin.',
   sortadded: 'Added Date',
   sorttitle: 'Title',
 });
@@ -60,16 +64,30 @@ const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'seen'];
 
 type ItemSortOption = 'added' | 'title';
 
-const sortItems = <T extends { title: string | null; createdAt: Date }>(
+// Pinned titles always lead, most recently pinned first, exactly like the server order
+// this starts from -- sortBy only decides how the unpinned remainder is ordered. Without
+// this split, choosing a sort would silently undo a pin: an "added" sort by real,
+// distinct timestamps overrides the server's pinned-first order outright, which is what
+// made pinning look like it did nothing.
+const sortItems = <
+  T extends { title: string | null; createdAt: Date; pinnedAt: Date | null },
+>(
   items: T[],
   sortBy: ItemSortOption
-): T[] =>
-  [...items].sort((a, b) => {
-    if (sortBy === 'title') {
-      return (a.title ?? '').localeCompare(b.title ?? '');
+): T[] => {
+  const pinned = [...items.filter((item) => item.pinnedAt !== null)].sort(
+    (a, b) => b.pinnedAt!.getTime() - a.pinnedAt!.getTime()
+  );
+  const unpinned = [...items.filter((item) => item.pinnedAt === null)].sort(
+    (a, b) => {
+      if (sortBy === 'title') {
+        return (a.title ?? '').localeCompare(b.title ?? '');
+      }
+      return b.createdAt.getTime() - a.createdAt.getTime();
     }
-    return b.createdAt.getTime() - a.createdAt.getTime();
-  });
+  );
+  return [...pinned, ...unpinned];
+};
 
 const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const intl = useIntl();
@@ -90,7 +108,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
     isLoading: itemsLoading,
     revalidate,
   } = useMediaListItems(mediaListId, filter);
-  const { setMovieWatched, setSeasonsWatched, removeItem } =
+  const { setMovieWatched, setSeasonsWatched, setPinned, removeItem } =
     useMediaListMutations(mediaListId);
 
   if (error) {
@@ -240,6 +258,16 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
                       }
                     } catch {
                       addToast(intl.formatMessage(messages.seenfailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onTogglePinned={async () => {
+                    try {
+                      await setPinned(item.id, !isPinned(item));
+                    } catch {
+                      addToast(intl.formatMessage(messages.pinfailed), {
                         appearance: 'error',
                         autoDismiss: true,
                       });

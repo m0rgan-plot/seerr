@@ -23,6 +23,7 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   // Relative TMDB path, or null when there is no art. Clients build the full URL the
   // same way they do everywhere else.
   posterPath: string | null;
+  year: number | null;
   // The requesting member's own state, so the poster strip can offer the right CTA.
   watched: boolean;
   // Where the title stands in the library. Null when nothing has ever tracked it.
@@ -30,6 +31,9 @@ export interface MediaListPreviewItem extends MediaListItemRef {
   createdAt: string;
   // Null once the person who added it is deleted. The item stays.
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Non-null sorts it to the top of
+  // the strip ahead of anything unpinned, most recently pinned first.
+  pinnedAt: string | null;
 }
 
 export interface MediaListSeasonProgress {
@@ -82,6 +86,9 @@ export interface MediaListItem {
   // reports one already in flight. Separate from watched, which is per member.
   status: MediaStatus | null;
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Non-null sorts it to the top of
+  // the list ahead of `position`, most recently pinned first.
+  pinnedAt: string | null;
   createdAt: string;
   updatedAt: string;
   // The requesting member's own state. Null progress means the title is a movie.

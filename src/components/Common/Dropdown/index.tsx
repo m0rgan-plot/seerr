@@ -24,7 +24,7 @@ const DropdownItem = ({
         className={[
           'button-md flex cursor-pointer items-center rounded px-4 py-2 text-sm leading-5 text-white focus:text-white focus:outline-none',
           buttonType === 'ghost'
-            ? 'bg-transparent from-indigo-600 to-purple-600 hover:bg-gradient-to-br focus:border-gray-500'
+            ? 'bg-transparent hover:bg-gray-700 focus:border-gray-500'
             : 'bg-indigo-600 hover:bg-indigo-500 focus:border-indigo-700',
         ].join(' ')}
         {...props}

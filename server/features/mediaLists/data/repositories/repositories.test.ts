@@ -296,6 +296,51 @@ describe('media list repositories', () => {
       );
     });
 
+    it('pins an item to the top ahead of position, most recently pinned first', async () => {
+      const { list, owner } = await seedList();
+      await items.add({
+        listId: list.id,
+        tmdbId: 1,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const second = await items.add({
+        listId: list.id,
+        tmdbId: 2,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const third = await items.add({
+        listId: list.id,
+        tmdbId: 3,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+
+      // second first, so third pinning last means third leads. The pause guarantees
+      // distinct pinnedAt timestamps to sort by.
+      await items.pin(second.id);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await items.pin(third.id);
+
+      const ordered = await items.findByList(list.id);
+      assert.deepStrictEqual(
+        ordered.map((item) => item.tmdbId),
+        [3, 2, 1]
+      );
+      assert.ok(ordered[0].pinnedAt);
+      assert.ok(ordered[1].pinnedAt);
+      assert.strictEqual(ordered[2].pinnedAt, null);
+
+      await items.unpin(second.id);
+      const afterUnpin = await items.findByList(list.id);
+      assert.deepStrictEqual(
+        afterUnpin.map((item) => item.tmdbId),
+        [3, 1, 2]
+      );
+      assert.strictEqual(afterUnpin[1].pinnedAt, null);
+    });
+
     it('will not reorder an item belonging to a different list', async () => {
       const { list, owner } = await seedList();
       const other = await lists.create({

@@ -31,6 +31,9 @@ export interface MediaListItem {
   status: MediaStatus | null;
   // Null once the person who added it is deleted. The title stays on the list.
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Shared across every member: a
+  // pinned title leads the list and the shelf strip regardless of who pinned it.
+  pinnedAt: Date | null;
   createdAt: Date;
   // Bumped only by adding the item or reordering the list, never by watched state.
   // What the "recently added" default sort orders on.
@@ -66,3 +69,6 @@ export const isSeries = (item: MediaListItem): boolean =>
 // Started but not finished, which is what the "In progress" filter chip counts.
 export const isInProgress = (item: MediaListItem): boolean =>
   !item.watched && (item.progress?.watchedEpisodes ?? 0) > 0;
+
+export const isPinned = (item: MediaListItem): boolean =>
+  item.pinnedAt !== null;

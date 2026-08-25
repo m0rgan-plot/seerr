@@ -11,6 +11,7 @@ import {
   UserPlusIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistShelf', {
@@ -35,25 +36,44 @@ const WatchlistShelf = ({
   onShare,
 }: WatchlistShelfProps) => {
   const intl = useIntl();
+  const router = useRouter();
+  const href = `/watchlists/${list.id}`;
 
   return (
+    // The row itself opens the list -- everything inside that already has its own
+    // destination (the poster strip's items and controls, the share/edit buttons, the
+    // shared-with avatars' profile links) stops the click from bubbling here, so its
+    // own click wins instead of also navigating to this list.
     <div
       data-testid="watchlist-shelf"
-      className="flex flex-col gap-4 border-t border-gray-700 py-4 lg:flex-row lg:items-center lg:gap-5"
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(href)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          router.push(href);
+        }
+      }}
+      className="flex cursor-pointer flex-col gap-4 rounded-lg border-t border-gray-700 px-2 py-4 transition-colors duration-150 hover:bg-gray-800/40 active:bg-gray-800/60 lg:flex-row lg:items-center lg:gap-5"
     >
       <div className="flex w-full flex-none flex-col gap-1.5 lg:w-[300px]">
         <div className="flex items-start justify-between gap-2">
           <Link
-            href={`/watchlists/${list.id}`}
+            href={href}
             className="group flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
           >
             <span className="text-lg font-bold text-gray-100 transition duration-150 group-hover:text-white">
               {list.name}
             </span>
-            <ChevronRightIcon className="h-4 w-4 text-gray-500" />
+            <ChevronRightIcon className="h-5 w-5 text-gray-500" />
           </Link>
 
-          <div className="flex flex-none items-center gap-1">
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- a propagation guard, not a new interactive element; the buttons inside are already keyboard-accessible on their own. */}
+          <div
+            className="flex flex-none items-center gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
             {onShare && (
               <Button
                 buttonType="ghost"
@@ -61,7 +81,7 @@ const WatchlistShelf = ({
                 onClick={() => onShare(list)}
                 title={intl.formatMessage(messages.share, { name: list.name })}
               >
-                <UserPlusIcon />
+                <UserPlusIcon className="h-5 w-5" />
               </Button>
             )}
 
@@ -74,7 +94,7 @@ const WatchlistShelf = ({
                   name: list.name,
                 })}
               >
-                <PencilIcon />
+                <PencilIcon className="h-5 w-5" />
               </Button>
             )}
           </div>
@@ -98,7 +118,11 @@ const WatchlistShelf = ({
           </span>
         </div>
 
-        <div className="mt-1 flex items-center gap-2">
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- a propagation guard; the avatar links inside are already keyboard-accessible on their own. */}
+        <div
+          className="mt-1 flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           <WatchlistRoleBadge role={list.role} />
           <WatchlistSharedWithAvatars
             sharedWith={list.sharedWith}
@@ -107,7 +131,8 @@ const WatchlistShelf = ({
         </div>
       </div>
 
-      <div className="min-w-0 flex-1">
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- a propagation guard; everything the strip renders is already its own keyboard-accessible link or button. */}
+      <div className="min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
         <WatchlistPosterStrip
           listId={list.id}
           name={list.name}

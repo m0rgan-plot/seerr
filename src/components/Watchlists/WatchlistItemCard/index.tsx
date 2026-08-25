@@ -1,11 +1,17 @@
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
+import Avatar from '@app/components/Watchlists/Avatar';
 import RemoveWatchlistItemModal from '@app/components/Watchlists/RemoveWatchlistItemModal';
+import WatchlistPinToggle from '@app/components/Watchlists/WatchlistPinToggle';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
 import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
 import type { MediaListItem } from '@app/domain/mediaLists/models/MediaListItem';
-import { isSeries } from '@app/domain/mediaLists/models/MediaListItem';
+import {
+  isPinned,
+  isSeries,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import { useIsTouch } from '@app/hooks/useIsTouch';
+import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
@@ -23,11 +29,11 @@ const messages = defineMessages('components.Watchlists.WatchlistItemCard', {
   markunseen: 'Mark Unseen',
   episodes: 'Episodes',
   episodeprogress: '{watched} / {total} episodes',
-  seenbyothers:
-    '{count, plural, one {# other member has seen this} other {# other members have seen this}}',
   untitled: 'Title Unavailable',
   remove: 'Remove',
   removelabel: 'Remove {title} from this watchlist',
+  addedon: 'Added {date}',
+  addedby: 'Added {date} by {name}',
 });
 
 interface WatchlistItemCardProps {
@@ -35,6 +41,7 @@ interface WatchlistItemCardProps {
   canEdit: boolean;
   episodesOpen: boolean;
   onToggleSeen: () => void;
+  onTogglePinned: () => void;
   onOpenEpisodes: () => void;
   onRemove: () => void;
   onRequestUpdate: () => void;
@@ -45,12 +52,14 @@ const WatchlistItemCard = ({
   canEdit,
   episodesOpen,
   onToggleSeen,
+  onTogglePinned,
   onOpenEpisodes,
   onRemove,
   onRequestUpdate,
 }: WatchlistItemCardProps) => {
   const intl = useIntl();
   const isTouch = useIsTouch();
+  const { user } = useUser();
 
   const [showDetail, setShowDetail] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -110,67 +119,66 @@ const WatchlistItemCard = ({
           />
 
           <div className="absolute left-0 right-0 flex items-start justify-between p-2">
-            <div
-              className={`pointer-events-none z-40 rounded-full border shadow-md ${
-                series
-                  ? 'border-purple-600 bg-purple-600/80'
-                  : 'border-blue-500 bg-blue-600/80'
-              }`}
-            >
-              <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
-                {intl.formatMessage(
-                  series ? globalMessages.tvshow : globalMessages.movie
-                )}
+            <div className="flex items-center gap-1">
+              {canEdit && (
+                <WatchlistPinToggle
+                  pinned={isPinned(item)}
+                  onToggle={onTogglePinned}
+                />
+              )}
+              <div
+                className={`pointer-events-none z-40 rounded-full border shadow-md ${
+                  series
+                    ? 'border-purple-600 bg-purple-600/80'
+                    : 'border-blue-500 bg-blue-600/80'
+                }`}
+              >
+                <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
+                  {intl.formatMessage(
+                    series ? globalMessages.tvshow : globalMessages.movie
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="flex flex-col items-end gap-1">
-              {/* Watched is the member's own state, so it stays visible rather than
-                  waiting for a hover the way the actions do. */}
-              {item.watched && (
-                <div
-                  data-testid="watchlist-item-seen"
-                  className="pointer-events-none z-40 flex h-5 w-5 items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
-                >
-                  <CheckIcon className="h-3 w-3" />
-                </div>
-              )}
-              {/* The list actions sit here, where a title card keeps its own secondary
-                  actions, because the foot of the card is only wide enough for one. */}
-              {showDetail && (
-                <div className="z-40 flex flex-col gap-1">
-                  <Button
-                    data-testid="watchlist-item-seen-toggle"
-                    buttonType="ghost"
-                    buttonSize="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onToggleSeen();
-                    }}
-                    title={intl.formatMessage(
-                      item.watched ? messages.markunseen : messages.markseen
-                    )}
+              {/* A series has no single-tap toggle -- it tracks per episode via the
+                  episode checklist -- so completion stays a quiet, non-interactive
+                  readout here, exactly as before. A movie's watched picto doubles as
+                  its own toggle now, the same way the pin picto does. */}
+              {series ? (
+                item.watched && (
+                  <div
+                    data-testid="watchlist-item-seen"
+                    className="pointer-events-none z-40 flex h-6 w-6 items-center justify-center rounded-full border border-green-400 bg-green-500/90 text-green-50 shadow-md"
                   >
-                    <CheckIcon className="h-3" />
-                  </Button>
-
-                  {canEdit && (
-                    <Button
-                      data-testid="watchlist-item-remove"
-                      buttonType="ghost"
-                      buttonSize="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setConfirmingRemove(true);
-                      }}
-                      title={intl.formatMessage(messages.removelabel, {
-                        title,
-                      })}
-                    >
-                      <TrashIcon className="h-3" />
-                    </Button>
+                    <CheckIcon className="h-3.5 w-3.5" />
+                  </div>
+                )
+              ) : (
+                <button
+                  type="button"
+                  data-testid="watchlist-item-seen-toggle"
+                  aria-pressed={item.watched}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onToggleSeen();
+                  }}
+                  title={intl.formatMessage(
+                    item.watched ? messages.markunseen : messages.markseen
                   )}
-                </div>
+                  className={`pointer-events-auto z-40 flex h-6 w-6 flex-none items-center justify-center rounded-full border shadow-md transition duration-150 ${
+                    item.watched
+                      ? 'border-green-400 bg-green-500/90 text-green-50 hover:border-green-300 hover:bg-green-400'
+                      : `border-gray-500 bg-gray-900/60 text-gray-300 hover:border-white hover:text-white ${
+                          showDetail
+                            ? 'opacity-100'
+                            : 'pointer-events-none opacity-0'
+                        }`
+                  }`}
+                >
+                  <CheckIcon className="h-3.5 w-3.5" />
+                </button>
               )}
             </div>
           </div>
@@ -243,13 +251,28 @@ const WatchlistItemCard = ({
                         })}
                       </div>
                     ) : null}
-                    {item.seenBy.length > 0 && (
-                      <div className="mt-1 text-xs text-gray-300">
-                        {intl.formatMessage(messages.seenbyothers, {
-                          count: item.seenBy.length,
-                        })}
-                      </div>
-                    )}
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
+                      <span>
+                        {intl.formatMessage(
+                          item.addedBy && item.addedBy.id !== user?.id
+                            ? messages.addedby
+                            : messages.addedon,
+                          {
+                            date: intl.formatDate(item.createdAt, {
+                              dateStyle: 'medium',
+                            }),
+                            name: item.addedBy?.displayName,
+                          }
+                        )}
+                      </span>
+                      {item.addedBy && item.addedBy.id !== user?.id && (
+                        <Avatar
+                          user={item.addedBy}
+                          size="sm"
+                          className="ring-2 ring-gray-800"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -273,12 +296,31 @@ const WatchlistItemCard = ({
                   </Button>
                 )}
 
+                {canEdit && (
+                  <Button
+                    data-testid="watchlist-item-remove"
+                    buttonType="ghost"
+                    buttonSize="sm"
+                    className="h-7"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setConfirmingRemove(true);
+                    }}
+                    title={intl.formatMessage(messages.removelabel, {
+                      title,
+                    })}
+                  >
+                    <TrashIcon />
+                  </Button>
+                )}
+
                 <WatchlistRequestButton
                   tmdbId={item.tmdbId}
                   mediaType={item.mediaType}
                   status={item.status}
                   className="h-7 flex-1"
                   onRequested={onRequestUpdate}
+                  hideLabel
                 />
               </div>
             </div>

@@ -440,6 +440,52 @@ describe('media list routes', () => {
         [2, 1]
       );
     });
+
+    it('pins an item ahead of the manual order and unpins it', async () => {
+      const owner = await asOwner();
+      const list = await createList(owner);
+      await addMovie(owner, list.id, 1);
+      const second = await addMovie(owner, list.id, 2);
+
+      const pinned = await owner.post(
+        `/mediaLists/${list.id}/items/${second.id}/pinned`
+      );
+      assert.strictEqual(pinned.status, 204);
+
+      const listed = await owner.get(`/mediaLists/${list.id}/items`);
+      assert.deepStrictEqual(
+        listed.body.map((item: { tmdbId: number }) => item.tmdbId),
+        [2, 1]
+      );
+      assert.ok(listed.body[0].pinnedAt);
+
+      const unpinned = await owner.delete(
+        `/mediaLists/${list.id}/items/${second.id}/pinned`
+      );
+      assert.strictEqual(unpinned.status, 204);
+
+      const afterUnpin = await owner.get(`/mediaLists/${list.id}/items`);
+      assert.deepStrictEqual(
+        afterUnpin.body.map((item: { tmdbId: number }) => item.tmdbId),
+        [1, 2]
+      );
+      assert.strictEqual(afterUnpin.body[1].pinnedAt, null);
+    });
+
+    it('refuses a read collaborator pinning', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
+      const item = await addMovie(owner, list.id);
+
+      const res = await friend.post(
+        `/mediaLists/${list.id}/items/${item.id}/pinned`
+      );
+
+      assert.strictEqual(res.status, 403);
+    });
   });
 
   describe('watched state', () => {

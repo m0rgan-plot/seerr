@@ -110,6 +110,16 @@ export const useMediaListMutations = (mediaListId?: number) => {
       await refreshList(id);
     },
 
+    setPinned: async (
+      itemId: number,
+      pinned: boolean,
+      listId?: number
+    ): Promise<void> => {
+      const id = requireList(listId);
+      await api.setPinned(id, itemId, pinned);
+      await refreshList(id);
+    },
+
     setMovieWatched: async (
       itemId: number,
       watched: boolean,

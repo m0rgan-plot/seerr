@@ -77,10 +77,12 @@ export const toMediaListSummaryDto = (
     mediaType: item.mediaType,
     title: item.title,
     posterPath: item.posterPath,
+    year: item.year,
     watched: item.watched,
     status: item.status,
     createdAt: item.createdAt.toISOString(),
     addedBy: toOptionalUser(item.addedBy),
+    pinnedAt: item.pinnedAt?.toISOString() ?? null,
   })),
 });
 
@@ -98,6 +100,7 @@ export const toMediaListItemDto = (
   position: view.item.position,
   status: view.item.status,
   addedBy: toOptionalUser(view.item.addedBy),
+  pinnedAt: view.item.pinnedAt?.toISOString() ?? null,
   createdAt: view.item.createdAt.toISOString(),
   updatedAt: view.item.updatedAt.toISOString(),
   watched: view.watched,

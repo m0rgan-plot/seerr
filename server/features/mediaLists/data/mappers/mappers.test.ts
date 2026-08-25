@@ -139,6 +139,31 @@ describe('media list mappers', () => {
 
       assert.strictEqual(toMediaListItem(record, 1).addedBy, null);
     });
+
+    it('defaults pinnedAt to null and passes through a pinned timestamp', () => {
+      const unpinned = new MediaListItemRecord({
+        id: 13,
+        tmdbId: 1,
+        mediaType: MediaType.MOVIE,
+        position: 0,
+        createdAt: new Date(),
+      });
+      assert.strictEqual(toMediaListItem(unpinned, 1).pinnedAt, null);
+
+      const pinnedAt = new Date('2026-08-24T10:00:00.000Z');
+      const pinned = new MediaListItemRecord({
+        id: 14,
+        tmdbId: 2,
+        mediaType: MediaType.MOVIE,
+        position: 0,
+        pinnedAt,
+        createdAt: new Date(),
+      });
+      assert.strictEqual(
+        toMediaListItem(pinned, 1).pinnedAt?.getTime(),
+        pinnedAt.getTime()
+      );
+    });
   });
 
   describe('toCollaboratorRole', () => {

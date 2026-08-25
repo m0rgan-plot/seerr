@@ -37,6 +37,7 @@ const item: MediaListItem = {
   position: 0,
   status: null,
   addedBy: null,
+  pinnedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
