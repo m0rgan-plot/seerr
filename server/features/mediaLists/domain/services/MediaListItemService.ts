@@ -140,6 +140,7 @@ export class MediaListItemService {
     } else {
       await this.items.unpin(itemId);
     }
+    await this.listService.touch(listId);
   }
 
   public async reorder(

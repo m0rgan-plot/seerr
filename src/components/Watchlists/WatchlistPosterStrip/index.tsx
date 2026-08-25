@@ -6,6 +6,7 @@ import WatchlistPinToggle from '@app/components/Watchlists/WatchlistPinToggle';
 import WatchlistRequestButton from '@app/components/Watchlists/WatchlistRequestButton';
 import WatchlistStatusDot from '@app/components/Watchlists/WatchlistStatusDot';
 import WatchlistStatusLegend from '@app/components/Watchlists/WatchlistStatusLegend';
+import { statusDotClass } from '@app/components/Watchlists/statusPresentation';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import type { MediaListRef } from '@app/domain/mediaLists/models/MediaList';
 import useClickOutside from '@app/hooks/useClickOutside';
@@ -122,6 +123,11 @@ const WatchlistPosterStrip = ({
       {previewItems.map((item) => {
         const key = `${item.mediaType}-${item.tmdbId}`;
         const tapped = isTouch && tappedKey === key;
+        // item.status can be UNKNOWN/DELETED, which WatchlistStatusDot deliberately
+        // renders as nothing -- checking the dot's own color mapping (rather than just
+        // truthiness of item.status) keeps the corner reserved only when there is
+        // actually a dot to reserve it for.
+        const hasStatusDot = !!(item.status && statusDotClass(item.status));
 
         return (
           <div
@@ -213,11 +219,15 @@ const WatchlistPosterStrip = ({
                 moving out of the way of the Remove/Request row (the canAdd case that
                 row is gated on) -- that row leaves this corner clear instead, via its
                 own pr-5. */}
-            {item.status && (
+            {hasStatusDot && item.status && (
               <div className="pointer-events-auto absolute bottom-1.5 right-1.5 z-30">
                 <Tooltip
                   content={<WatchlistStatusLegend />}
-                  tooltipConfig={{ delayShow: 1000 }}
+                  // followCursor is the Tooltip default, meant for elements large
+                  // enough for the cursor to roam across. This dot is fixed and tiny,
+                  // and cursor-tracking here was the likely cause of the tooltip
+                  // occasionally sticking open after the mouse had actually left.
+                  tooltipConfig={{ delayShow: 1000, followCursor: false }}
                 >
                   <span className="inline-flex">
                     <WatchlistStatusDot status={item.status} />
@@ -267,11 +277,15 @@ const WatchlistPosterStrip = ({
 
               {canAdd && (
                 // pr-5 leaves the status dot's fixed bottom-right corner clear rather
-                // than letting the request button (flex-1) run underneath it.
-                <div className="pointer-events-auto flex gap-1 pr-5">
+                // than letting the request button (flex-1) run underneath it -- only
+                // when there is a dot there to clear; otherwise the row uses the width.
+                <div
+                  className={`pointer-events-auto flex gap-2 ${hasStatusDot ? 'pr-5' : ''}`}
+                >
                   <Button
                     buttonType="danger"
                     buttonSize="sm"
+                    className="flex-1"
                     onClick={() => setRemoving(item)}
                     title={intl.formatMessage(messages.remove)}
                   >
