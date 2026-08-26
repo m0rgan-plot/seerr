@@ -12,30 +12,52 @@ import type { MediaList } from '@app/domain/mediaLists/models/MediaList';
 import type { MediaListItem } from '@app/domain/mediaLists/models/MediaListItem';
 import type { MediaType } from '@server/constants/media';
 import { useCallback } from 'react';
-import { mutate } from 'swr';
+import { mutate, useSWRConfig } from 'swr';
 
 // Every call refreshes the keys the change actually affects and then rethrows, so the
 // component that triggered it owns the success and failure copy. Keeping the messaging
 // out of here is what stops this layer from needing i18n.
 export const useMediaListMutations = (mediaListId?: number) => {
+  const { cache } = useSWRConfig();
   const refreshIndex = useCallback(() => mutate(api.mediaListsKey), []);
 
   const refreshList = useCallback(
-    (listId: number) =>
-      Promise.all([
+    async (listId: number) => {
+      const itemsPrefix = `${api.listKey(listId)}/items`;
+
+      // useMediaListItems pages via useSWRInfinite, which keeps each loaded page's data
+      // under its own plain key (e.g. `.../items?page=2`) but only refetches a page
+      // whose own cached data is missing -- a bare revalidate is a no-op otherwise,
+      // since revalidateFirstPage is off and every page still looks up to date to it.
+      // Clearing each page's own cache first (revalidate: false, so nothing renders off
+      // it -- no component reads these plain keys directly) is what makes the next
+      // revalidate below actually treat every loaded page as stale and refetch it.
+      await mutate(
+        (key) => typeof key === 'string' && key.startsWith(itemsPrefix),
+        undefined,
+        { revalidate: false }
+      );
+
+      // The hook itself subscribes to a `$inf$`-prefixed aggregate key, not the plain
+      // items key above -- and SWR's predicate-matching mutate deliberately skips any
+      // `$inf$`/`$sub$` key before it ever reaches a filter function (see swr's
+      // internalMutate), so the only way to revalidate it from outside the component is
+      // an exact-key mutate, found by walking the cache this hook's own SWRConfig uses.
+      const infinitePrefix = `$inf$${itemsPrefix}`;
+      const infiniteKeys: string[] = [];
+      for (const key of cache.keys()) {
+        if (typeof key === 'string' && key.startsWith(infinitePrefix)) {
+          infiniteKeys.push(key);
+        }
+      }
+
+      await Promise.all([
         mutate(api.listKey(listId)),
-        // The items key varies by filter, so refresh every variant that is cached.
-        // Passing data alongside the filter would make SWR write it: the third argument
-        // takes it out of the revalidate-only path, and an undefined payload then blanks
-        // the cache before the refetch lands, unmounting whatever is on screen.
-        mutate(
-          (key) =>
-            typeof key === 'string' &&
-            key.startsWith(`${api.listKey(listId)}/items`)
-        ),
+        ...infiniteKeys.map((key) => mutate(key)),
         mutate(api.mediaListsKey),
-      ]),
-    []
+      ]);
+    },
+    [cache]
   );
 
   const refreshCollaborators = useCallback(
