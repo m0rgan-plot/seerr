@@ -3,6 +3,7 @@ import {
   CannotCollaborateAsOwnerError,
   CollaboratorNotFoundError,
   DuplicateCollaboratorError,
+  InviteNotFoundError,
   UserNotFoundError,
 } from '@server/features/mediaLists/domain/errors/MediaListErrors';
 import type { NotificationGateway } from '@server/features/mediaLists/domain/ports/NotificationGateway';
@@ -80,6 +81,42 @@ export class MediaListCollaboratorService {
     });
 
     return collaborator;
+  }
+
+  // The invited user acting on their own pending invite. There is no membership yet to
+  // check against the access policy with, so this is keyed entirely off "is there a
+  // pending row for this exact list and user" instead.
+  public async acceptInvite(input: {
+    listId: number;
+    userId: number;
+  }): Promise<Collaborator> {
+    const invite = await this.collaborators.findPendingInvite(
+      input.listId,
+      input.userId
+    );
+    if (!invite) {
+      throw new InviteNotFoundError();
+    }
+
+    return this.collaborators.accept(input.listId, input.userId);
+  }
+
+  // Final: there is no un-reject. Rejecting deletes the row outright, the same as
+  // remove(), so a later invite from the owner starts from a clean pending row rather
+  // than colliding with a leftover one.
+  public async rejectInvite(input: {
+    listId: number;
+    userId: number;
+  }): Promise<void> {
+    const invite = await this.collaborators.findPendingInvite(
+      input.listId,
+      input.userId
+    );
+    if (!invite) {
+      throw new InviteNotFoundError();
+    }
+
+    await this.collaborators.remove(input.listId, input.userId);
   }
 
   public async changeRole(input: {

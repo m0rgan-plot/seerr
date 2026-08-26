@@ -35,8 +35,11 @@ const item: MediaListItem = {
   tmdbId: 693134,
   mediaType: MediaType.MOVIE,
   position: 0,
+  status: null,
   addedBy: null,
+  pinnedAt: null,
   createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 const capture = () => {
@@ -88,8 +91,8 @@ describe('NotificationGatewayImpl', () => {
       assert.strictEqual(payload.subject, 'Sunday Night Sci-Fi');
       assert.match(payload.message ?? '', /add and remove titles/);
       assert.deepStrictEqual(
-        payload.extra?.find((entry) => entry.name === 'Access'),
-        { name: 'Access', value: 'Can edit' }
+        payload.extra?.find((entry) => entry.name === 'Access offered'),
+        { name: 'Access offered', value: 'Can edit' }
       );
       // These are person to person, so the admin fan-out stays off.
       assert.strictEqual(payload.notifyAdmin, false);
@@ -108,8 +111,10 @@ describe('NotificationGatewayImpl', () => {
 
       assert.match(calls[0].payload.message ?? '', /view it/);
       assert.deepStrictEqual(
-        calls[0].payload.extra?.find((entry) => entry.name === 'Access'),
-        { name: 'Access', value: 'Can view' }
+        calls[0].payload.extra?.find(
+          (entry) => entry.name === 'Access offered'
+        ),
+        { name: 'Access offered', value: 'Can view' }
       );
     });
 

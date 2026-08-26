@@ -12,29 +12,69 @@ import type { MediaList } from '@app/domain/mediaLists/models/MediaList';
 import type { MediaListItem } from '@app/domain/mediaLists/models/MediaListItem';
 import type { MediaType } from '@server/constants/media';
 import { useCallback } from 'react';
-import { mutate } from 'swr';
+import { mutate, useSWRConfig } from 'swr';
 
 // Every call refreshes the keys the change actually affects and then rethrows, so the
 // component that triggered it owns the success and failure copy. Keeping the messaging
 // out of here is what stops this layer from needing i18n.
 export const useMediaListMutations = (mediaListId?: number) => {
+  const { cache } = useSWRConfig();
   const refreshIndex = useCallback(() => mutate(api.mediaListsKey), []);
 
   const refreshList = useCallback(
-    (listId: number) =>
-      Promise.all([
+    async (listId: number) => {
+      const itemsPrefix = `${api.listKey(listId)}/items`;
+
+      // useMediaListItems pages via useSWRInfinite, which keeps each loaded page's data
+      // under its own plain key (e.g. `.../items?page=2`) but only refetches a page
+      // whose own cached data is missing -- a bare revalidate is a no-op otherwise,
+      // since revalidateFirstPage is off and every page still looks up to date to it.
+      // Clearing each page's own cache first (revalidate: false, so nothing renders off
+      // it -- no component reads these plain keys directly) is what makes the next
+      // revalidate below actually treat every loaded page as stale and refetch it.
+      // Scoped to page keys (the `?` from their query string) only -- a progress key
+      // (`.../items/{id}/progress`) also starts with itemsPrefix but IS read directly by
+      // a mounted useItemProgress, so clearing it with revalidate: false the same way
+      // would strand that hook on `undefined` forever instead of just refetching below.
+      await mutate(
+        (key) =>
+          typeof key === 'string' &&
+          key.startsWith(itemsPrefix) &&
+          key.includes('?'),
+        undefined,
+        { revalidate: false }
+      );
+
+      // The hook itself subscribes to a `$inf$`-prefixed aggregate key, not the plain
+      // items key above -- and SWR's predicate-matching mutate deliberately skips any
+      // `$inf$`/`$sub$` key before it ever reaches a filter function (see swr's
+      // internalMutate), so the only way to revalidate it from outside the component is
+      // an exact-key mutate, found by walking the cache this hook's own SWRConfig uses.
+      // Any open episode tracker's progress key is walked the same way, and revalidated
+      // in place (no pre-clear) so it keeps showing its last data while refetching.
+      const infinitePrefix = `$inf$${itemsPrefix}`;
+      const infiniteKeys: string[] = [];
+      const progressKeys: string[] = [];
+      for (const key of cache.keys()) {
+        if (typeof key === 'string' && key.startsWith(infinitePrefix)) {
+          infiniteKeys.push(key);
+        } else if (
+          typeof key === 'string' &&
+          key.startsWith(itemsPrefix) &&
+          key.endsWith('/progress')
+        ) {
+          progressKeys.push(key);
+        }
+      }
+
+      await Promise.all([
         mutate(api.listKey(listId)),
-        // The items key varies by filter, so refresh every variant that is cached.
-        mutate(
-          (key) =>
-            typeof key === 'string' &&
-            key.startsWith(`${api.listKey(listId)}/items`),
-          undefined,
-          { revalidate: true }
-        ),
+        ...infiniteKeys.map((key) => mutate(key)),
+        ...progressKeys.map((key) => mutate(key)),
         mutate(api.mediaListsKey),
-      ]),
-    []
+      ]);
+    },
+    [cache]
   );
 
   const refreshCollaborators = useCallback(
@@ -43,6 +83,11 @@ export const useMediaListMutations = (mediaListId?: number) => {
         mutate(api.collaboratorsKey(listId)),
         mutate(api.listKey(listId)),
       ]),
+    []
+  );
+
+  const refreshInvites = useCallback(
+    () => Promise.all([mutate(api.invitesKey), mutate(api.mediaListsKey)]),
     []
   );
 
@@ -104,6 +149,16 @@ export const useMediaListMutations = (mediaListId?: number) => {
       await refreshList(id);
     },
 
+    setPinned: async (
+      itemId: number,
+      pinned: boolean,
+      listId?: number
+    ): Promise<void> => {
+      const id = requireList(listId);
+      await api.setPinned(id, itemId, pinned);
+      await refreshList(id);
+    },
+
     setMovieWatched: async (
       itemId: number,
       watched: boolean,
@@ -122,6 +177,21 @@ export const useMediaListMutations = (mediaListId?: number) => {
     ): Promise<void> => {
       const id = requireList(listId);
       await api.setSeasonWatched(id, itemId, seasonNumber, watched);
+      await refreshList(id);
+    },
+
+    // Marking a whole show is one intent, so it refreshes once at the end rather than
+    // after each season. The calls stay sequential because they write the same rows.
+    setSeasonsWatched: async (
+      itemId: number,
+      seasonNumbers: number[],
+      watched: boolean,
+      listId?: number
+    ): Promise<void> => {
+      const id = requireList(listId);
+      for (const seasonNumber of seasonNumbers) {
+        await api.setSeasonWatched(id, itemId, seasonNumber, watched);
+      }
       await refreshList(id);
     },
 
@@ -173,6 +243,21 @@ export const useMediaListMutations = (mediaListId?: number) => {
       await refreshCollaborators(id);
       // Losing access changes which lists the index should show.
       await refreshIndex();
+    },
+
+    acceptInvite: async (listId?: number): Promise<Collaborator> => {
+      const id = requireList(listId);
+      const accepted = await api.acceptWatchlistInvite(id);
+      // Accepting moves the list into "Shared with Me", so both caches need to move
+      // together rather than the list flashing as absent between the two refetches.
+      await refreshInvites();
+      return toCollaborator(accepted);
+    },
+
+    rejectInvite: async (listId?: number): Promise<void> => {
+      const id = requireList(listId);
+      await api.rejectWatchlistInvite(id);
+      await refreshInvites();
     },
   };
 };

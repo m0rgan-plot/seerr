@@ -5,11 +5,13 @@ import {
   DuplicateMediaListItemError,
   InvalidReorderError,
   InvalidWatchTargetError,
+  InviteNotFoundError,
   ItemNotFoundInListError,
   MediaListAccessDeniedError,
   MediaListNotFoundError,
   UserNotFoundError,
 } from '@server/features/mediaLists/domain/errors/MediaListErrors';
+import logger from '@server/logger';
 import { ZodError } from 'zod';
 
 export interface HttpError {
@@ -36,6 +38,7 @@ export const toHttpError = (error: unknown): HttpError => {
     case ItemNotFoundInListError:
     case CollaboratorNotFoundError:
     case UserNotFoundError:
+    case InviteNotFoundError:
       return { status: 404, message };
     case MediaListAccessDeniedError:
       return { status: 403, message };
@@ -47,6 +50,13 @@ export const toHttpError = (error: unknown): HttpError => {
     case InvalidReorderError:
       return { status: 400, message };
     default:
+      // Nothing above claimed it, so this is a defect or an infrastructure failure rather
+      // than a rejected request. The other routers log before handing back a 500, and
+      // without that these fail silently.
+      logger.error('Unhandled error in a watchlist route', {
+        label: 'Media Lists',
+        errorMessage: message,
+      });
       return { status: 500, message };
   }
 };

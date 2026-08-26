@@ -84,6 +84,7 @@ const SidebarLinks: SidebarLinkProps[] = [
     messagesKey: 'watchlists',
     svgIcon: <RectangleStackIcon className="mr-3 h-6 w-6" />,
     activeRegExp: /^\/watchlists/,
+    dataTestId: 'sidebar-menu-watchlists',
   },
   {
     href: '/blocklist',

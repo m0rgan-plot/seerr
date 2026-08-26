@@ -5,9 +5,11 @@ import PageTitle from '@app/components/Common/PageTitle';
 import AddMediaModal from '@app/components/Watchlists/AddMediaModal';
 import CreateEditWatchlistModal from '@app/components/Watchlists/CreateEditWatchlistModal';
 import DeleteWatchlistModal from '@app/components/Watchlists/DeleteWatchlistModal';
+import ShareWatchlistModal from '@app/components/Watchlists/ShareWatchlistModal';
 import WatchlistEpisodeTracker from '@app/components/Watchlists/WatchlistEpisodeTracker';
 import WatchlistItemCard from '@app/components/Watchlists/WatchlistItemCard';
 import WatchlistRoleBadge from '@app/components/Watchlists/WatchlistRoleBadge';
+import WatchlistSharedWithAvatars from '@app/components/Watchlists/WatchlistSharedWithAvatars';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import {
   useMediaList,
@@ -16,35 +18,54 @@ import {
 import {
   canDeleteList,
   canEditItems,
+  canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
-import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
+import type {
+  MediaListItem,
+  MediaListItemFilter,
+  MediaListItemSortBy,
+} from '@app/domain/mediaLists/models/MediaListItem';
+import {
+  isPinned,
+  isSeries,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
+import useVerticalScroll from '@app/hooks/useVerticalScroll';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
-import { PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
+import {
+  BarsArrowDownIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  UserPlusIcon,
+} from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Fragment, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistDetail', {
   watchlists: 'Watchlists',
-  addmedia: 'Add media',
+  addmedia: 'Add Media',
   edit: 'Edit',
+  share: 'Share',
   all: 'All',
   unseen: 'Unseen',
-  inprogress: 'In progress',
+  inprogress: 'In Progress',
   seen: 'Seen',
   seenprogress: "You've seen {watched} of {total}",
   empty: 'Nothing on this list yet.',
-  emptyaction: 'Add the first title',
+  emptyaction: 'Add the First Title',
   emptyreadonly: 'The owner has not added anything yet.',
   removed: 'Removed from the watchlist.',
   removefailed: 'Something went wrong removing that title.',
   seenfailed: 'Something went wrong updating your watched state.',
+  pinfailed: 'Something went wrong updating that pin.',
+  sortadded: 'Added Date',
+  sorttitle: 'Title',
 });
 
-const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'inprogress', 'seen'];
+const FILTERS: MediaListItemFilter[] = ['all', 'unseen', 'seen'];
 
 const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const intl = useIntl();
@@ -56,14 +77,54 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [trackingItemId, setTrackingItemId] = useState<number | null>(null);
+  const [showShare, setShowShare] = useState(false);
+  const [sortBy, setSortBy] = useState<MediaListItemSortBy>('added');
 
   const { data: list, error, isLoading } = useMediaList(mediaListId);
   const {
-    data: items,
+    data: rawItems,
+    totalResults: rawTotalResults,
+    seenCount: rawSeenCount,
     isLoading: itemsLoading,
+    isLoadingMore,
+    isReachingEnd,
+    fetchMore,
     revalidate,
-  } = useMediaListItems(mediaListId, filter);
-  const { setMovieWatched, removeItem } = useMediaListMutations(mediaListId);
+  } = useMediaListItems(mediaListId, filter, sortBy);
+
+  // A watched/pin toggle clears every loaded page's cache to force a refetch (see
+  // useMediaListMutations), which makes rawItems momentarily undefined. Snapshotting
+  // the last good page keeps the grid on screen through that gap instead of flashing
+  // it out for a spinner on every toggle.
+  const [itemsSnapshot, setItemsSnapshot] = useState<{
+    items: MediaListItem[];
+    totalResults: number;
+    seenCount: number;
+  } | null>(null);
+  useEffect(() => {
+    if (rawItems) {
+      setItemsSnapshot({
+        items: rawItems,
+        totalResults: rawTotalResults,
+        seenCount: rawSeenCount,
+      });
+    }
+  }, [rawItems, rawTotalResults, rawSeenCount]);
+
+  const items = itemsSnapshot?.items;
+  const totalResults = itemsSnapshot?.totalResults ?? 0;
+  const seenCount = itemsSnapshot?.seenCount ?? 0;
+
+  useVerticalScroll(
+    fetchMore,
+    !itemsLoading && !isLoadingMore && !isReachingEnd
+  );
+  const { setMovieWatched, setSeasonsWatched, setPinned, removeItem } =
+    useMediaListMutations(mediaListId);
+
+  // Read back from the snapshot so the tracker follows a refresh rather than holding
+  // the copy it was opened with.
+  const trackedItem = items?.find((item) => item.id === trackingItemId) ?? null;
 
   if (error) {
     return <Error statusCode={404} />;
@@ -74,7 +135,6 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   }
 
   const canEdit = canEditItems(list.role);
-  const seenCount = items?.filter((item) => item.watched).length ?? 0;
 
   const labelFor = (value: MediaListItemFilter) =>
     intl.formatMessage(messages[value]);
@@ -99,13 +159,20 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
           )}
           <div className="mt-3 flex items-center gap-3">
             <WatchlistRoleBadge role={list.role} />
-            <span className="text-xs text-gray-500">
-              {list.owner.displayName}
-            </span>
+            <WatchlistSharedWithAvatars
+              sharedWith={list.sharedWith}
+              sharedWithCount={list.sharedWithCount}
+            />
           </div>
         </div>
 
         <div className="mt-3 flex gap-2 lg:mt-0">
+          {canManageCollaborators(list.role) && (
+            <Button buttonType="default" onClick={() => setShowShare(true)}>
+              <UserPlusIcon />
+              <span>{intl.formatMessage(messages.share)}</span>
+            </Button>
+          )}
           {canEdit && (
             <Button buttonType="default" onClick={() => setShowEdit(true)}>
               <PencilSquareIcon />
@@ -124,85 +191,130 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-700 pt-4">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((value) => (
-            <button
+            <Button
               key={value}
-              type="button"
+              buttonType={filter === value ? 'primary' : 'default'}
+              buttonSize="sm"
+              data-testid={`watchlist-filter-${value}`}
+              aria-pressed={filter === value}
               onClick={() => setFilter(value)}
-              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition duration-150 ${
-                filter === value
-                  ? 'border-indigo-500 bg-indigo-600 bg-opacity-80 text-white'
-                  : 'border-gray-600 text-gray-300 hover:border-gray-500'
-              }`}
             >
               {labelFor(value)}
-            </button>
+            </Button>
           ))}
         </div>
 
-        {filter === 'all' && items && items.length > 0 && (
-          <div className="text-sm text-gray-400">
-            {intl.formatMessage(messages.seenprogress, {
-              watched: seenCount,
-              total: items.length,
-            })}
+        <div className="flex flex-wrap items-center gap-3">
+          {filter === 'all' && items && items.length > 0 && (
+            <div className="text-sm text-gray-400">
+              {intl.formatMessage(messages.seenprogress, {
+                watched: seenCount,
+                total: totalResults,
+              })}
+            </div>
+          )}
+
+          <div className="flex">
+            <span className="inline-flex cursor-default items-center rounded-l-md border border-r-0 border-gray-500 bg-gray-800 px-3 text-gray-100 sm:text-sm">
+              <BarsArrowDownIcon className="h-5 w-5" />
+            </span>
+            <select
+              id="mediaListItemSortBy"
+              name="mediaListItemSortBy"
+              className="rounded-r-only short"
+              data-testid="watchlist-item-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as MediaListItemSortBy)}
+            >
+              <option value="added">
+                {intl.formatMessage(messages.sortadded)}
+              </option>
+              <option value="title">
+                {intl.formatMessage(messages.sorttitle)}
+              </option>
+            </select>
           </div>
-        )}
+        </div>
       </div>
 
-      {itemsLoading ? (
+      {itemsLoading && !items ? (
         <LoadingSpinner />
       ) : items && items.length > 0 ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-          {items.map((item) => (
-            <Fragment key={item.id}>
-              <WatchlistItemCard
-                item={item}
-                canEdit={canEdit}
-                onToggleSeen={async () => {
-                  try {
-                    await setMovieWatched(item.id, !item.watched);
-                  } catch {
-                    addToast(intl.formatMessage(messages.seenfailed), {
-                      appearance: 'error',
-                      autoDismiss: true,
-                    });
-                  }
-                }}
-                onOpenEpisodes={() =>
-                  setTrackingItemId((current) =>
-                    current === item.id ? null : item.id
-                  )
-                }
-                onRemove={async () => {
-                  try {
-                    await removeItem(item.id);
-                    addToast(intl.formatMessage(messages.removed), {
-                      appearance: 'success',
-                      autoDismiss: true,
-                    });
-                  } catch {
-                    addToast(intl.formatMessage(messages.removefailed), {
-                      appearance: 'error',
-                      autoDismiss: true,
-                    });
-                  }
-                }}
-                onRequestUpdate={revalidate}
-              />
-
-              {/* Spans the grid so the accordion opens under the row holding the card,
-                  rather than squeezing into one poster's column. */}
-              {trackingItemId === item.id && (
-                <WatchlistEpisodeTracker
-                  mediaListId={mediaListId}
+        <>
+          <ul className="cards-vertical">
+            {/* Server-sorted: pinned first, then by sortBy. Watching an item never
+                changes its position, so ticking one off doesn't reshuffle the grid. */}
+            {items.map((item) => (
+              <li key={item.id}>
+                <WatchlistItemCard
                   item={item}
-                  onClose={() => setTrackingItemId(null)}
-                  onChanged={revalidate}
+                  canEdit={canEdit}
+                  episodesOpen={trackingItemId === item.id}
+                  onToggleSeen={async () => {
+                    try {
+                      // A series has no single watched flag server-side -- it tracks
+                      // per episode -- so the same one-tap toggle a movie gets has to
+                      // mark every trackable season instead of the title itself.
+                      if (isSeries(item)) {
+                        const trackableSeasons = (item.progress?.seasons ?? [])
+                          .filter((season) => season.totalEpisodes > 0)
+                          .map((season) => season.seasonNumber);
+                        await setSeasonsWatched(
+                          item.id,
+                          trackableSeasons,
+                          !item.watched
+                        );
+                      } else {
+                        await setMovieWatched(item.id, !item.watched);
+                      }
+                    } catch {
+                      addToast(intl.formatMessage(messages.seenfailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onTogglePinned={async () => {
+                    try {
+                      await setPinned(item.id, !isPinned(item));
+                    } catch {
+                      addToast(intl.formatMessage(messages.pinfailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onOpenEpisodes={() =>
+                    setTrackingItemId((current) =>
+                      current === item.id ? null : item.id
+                    )
+                  }
+                  onRemove={async () => {
+                    try {
+                      await removeItem(item.id);
+                      addToast(intl.formatMessage(messages.removed), {
+                        appearance: 'success',
+                        autoDismiss: true,
+                      });
+                    } catch {
+                      addToast(intl.formatMessage(messages.removefailed), {
+                        appearance: 'error',
+                        autoDismiss: true,
+                      });
+                    }
+                  }}
+                  onRequestUpdate={revalidate}
                 />
-              )}
-            </Fragment>
-          ))}
-        </div>
+              </li>
+            ))}
+          </ul>
+
+          {isLoadingMore && !isReachingEnd && (
+            <div className="mt-4">
+              <LoadingSpinner />
+            </div>
+          )}
+        </>
       ) : (
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-gray-400">
@@ -219,9 +331,23 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
         </div>
       )}
 
+      <WatchlistEpisodeTracker
+        show={trackingItemId !== null}
+        mediaListId={mediaListId}
+        item={trackedItem}
+        onClose={() => setTrackingItemId(null)}
+      />
+
+      <ShareWatchlistModal
+        show={showShare}
+        list={list}
+        onCancel={() => setShowShare(false)}
+      />
+
       <AddMediaModal
         show={showAdd}
         mediaListId={mediaListId}
+        mediaListName={list.name}
         onComplete={() => setShowAdd(false)}
         onCancel={() => setShowAdd(false)}
       />

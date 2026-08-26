@@ -79,6 +79,13 @@ const friendId = async () =>
     })
   ).id;
 
+const ownerId = async () =>
+  (
+    await getRepository(User).findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    })
+  ).id;
+
 async function createList(agent: request.Agent, name = 'Sunday Night Sci-Fi') {
   const res = await agent
     .post('/mediaLists')
@@ -97,6 +104,15 @@ async function shareWith(
     .post(`/mediaLists/${listId}/collaborators`)
     .send({ userId, role });
   assert.strictEqual(res.status, 201);
+  return res.body;
+}
+
+// Sharing only creates a pending invite now, so tests that need the invited agent to
+// actually have access call this after shareWith, the same way the invited user would
+// accept through the UI.
+async function acceptInvite(agent: request.Agent, listId: number) {
+  const res = await agent.post(`/mediaLists/${listId}/invite/accept`);
+  assert.strictEqual(res.status, 200);
   return res.body;
 }
 
@@ -147,6 +163,7 @@ describe('media list routes', () => {
       const friend = await asFriend();
       const list = await createList(owner);
       await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
 
       const mine = await owner.get('/mediaLists');
       const theirs = await friend.get('/mediaLists');
@@ -168,10 +185,28 @@ describe('media list routes', () => {
 
       assert.strictEqual(res.body[0].itemCount, 2);
       assert.strictEqual(res.body[0].seenCount, 1);
+      // Most recently added leads, so the second movie comes first.
       assert.deepStrictEqual(
         res.body[0].previewItems.map((item: { tmdbId: number }) => item.tmdbId),
-        [1, 2]
+        [2, 1]
       );
+    });
+
+    it('includes the owner in a collaborator sharedWith, same as the detail page', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'write');
+      await acceptInvite(friend, list.id);
+
+      const res = await friend.get('/mediaLists');
+
+      assert.strictEqual(res.body.length, 1);
+      assert.deepStrictEqual(
+        res.body[0].sharedWith.map((user: { id: number }) => user.id),
+        [await ownerId(), await friendId()]
+      );
+      assert.strictEqual(res.body[0].sharedWithCount, 2);
     });
 
     it('never exposes sensitive user fields', async () => {
@@ -197,6 +232,7 @@ describe('media list routes', () => {
       const friend = await asFriend();
       const list = await createList(owner);
       await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
 
       assert.strictEqual(
         (await owner.get(`/mediaLists/${list.id}`)).status,
@@ -205,6 +241,46 @@ describe('media list routes', () => {
       assert.strictEqual(
         (await friend.get(`/mediaLists/${list.id}`)).status,
         200
+      );
+    });
+
+    it('includes the owner in sharedWith, so a write collaborator can see who has access', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'write');
+      await acceptInvite(friend, list.id);
+
+      // sharedWith is list-scoped, not viewer-relative: it names owner plus every
+      // accepted collaborator regardless of who is asking. Excluding the viewer's own
+      // face is a frontend concern (WatchlistSharedWithAvatars), not this endpoint's.
+      const expected = [await ownerId(), await friendId()];
+
+      const asFriendRes = await friend.get(`/mediaLists/${list.id}`);
+      assert.strictEqual(asFriendRes.status, 200);
+      assert.deepStrictEqual(
+        asFriendRes.body.sharedWith.map((user: { id: number }) => user.id),
+        expected
+      );
+      assert.strictEqual(asFriendRes.body.sharedWithCount, 2);
+
+      const asOwnerRes = await owner.get(`/mediaLists/${list.id}`);
+      assert.deepStrictEqual(
+        asOwnerRes.body.sharedWith.map((user: { id: number }) => user.id),
+        expected
+      );
+    });
+
+    it('does not include a pending invitee in sharedWith', async () => {
+      const owner = await asOwner();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+
+      const res = await owner.get(`/mediaLists/${list.id}`);
+
+      assert.deepStrictEqual(
+        res.body.sharedWith.map((user: { id: number }) => user.id),
+        [await ownerId()]
       );
     });
 
@@ -231,6 +307,7 @@ describe('media list routes', () => {
       const friend = await asFriend();
       const list = await createList(owner);
       await shareWith(owner, list.id, await friendId(), 'write');
+      await acceptInvite(friend, list.id);
 
       const renamed = await friend
         .put(`/mediaLists/${list.id}`)
@@ -248,6 +325,7 @@ describe('media list routes', () => {
       const friend = await asFriend();
       const list = await createList(owner);
       await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
 
       const res = await friend
         .put(`/mediaLists/${list.id}`)
@@ -286,11 +364,12 @@ describe('media list routes', () => {
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
 
       assert.strictEqual(listed.status, 200);
-      assert.strictEqual(listed.body.length, 1);
-      assert.strictEqual(listed.body[0].tmdbId, 693134);
-      assert.strictEqual(listed.body[0].watched, false);
-      assert.strictEqual(listed.body[0].progress, null);
-      assert.deepStrictEqual(listed.body[0].seenBy, []);
+      assert.strictEqual(listed.body.results.length, 1);
+      assert.strictEqual(listed.body.totalResults, 1);
+      assert.strictEqual(listed.body.results[0].tmdbId, 693134);
+      assert.strictEqual(listed.body.results[0].watched, false);
+      assert.strictEqual(listed.body.results[0].progress, null);
+      assert.deepStrictEqual(listed.body.results[0].seenBy, []);
 
       assert.strictEqual(
         (await owner.delete(`/mediaLists/${list.id}/items/${item.id}`)).status,
@@ -326,6 +405,7 @@ describe('media list routes', () => {
       const friend = await asFriend();
       const list = await createList(owner);
       await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
       const item = await addMovie(owner, list.id);
 
       const added = await friend
@@ -357,9 +437,55 @@ describe('media list routes', () => {
 
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
       assert.deepStrictEqual(
-        listed.body.map((item: { tmdbId: number }) => item.tmdbId),
+        listed.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [2, 1]
       );
+    });
+
+    it('pins an item ahead of the manual order and unpins it', async () => {
+      const owner = await asOwner();
+      const list = await createList(owner);
+      await addMovie(owner, list.id, 1);
+      const second = await addMovie(owner, list.id, 2);
+
+      const pinned = await owner.post(
+        `/mediaLists/${list.id}/items/${second.id}/pinned`
+      );
+      assert.strictEqual(pinned.status, 204);
+
+      const listed = await owner.get(`/mediaLists/${list.id}/items`);
+      assert.deepStrictEqual(
+        listed.body.results.map((item: { tmdbId: number }) => item.tmdbId),
+        [2, 1]
+      );
+      assert.ok(listed.body.results[0].pinnedAt);
+
+      const unpinned = await owner.delete(
+        `/mediaLists/${list.id}/items/${second.id}/pinned`
+      );
+      assert.strictEqual(unpinned.status, 204);
+
+      const afterUnpin = await owner.get(`/mediaLists/${list.id}/items`);
+      assert.deepStrictEqual(
+        afterUnpin.body.results.map((item: { tmdbId: number }) => item.tmdbId),
+        [2, 1]
+      );
+      assert.strictEqual(afterUnpin.body.results[1].pinnedAt, null);
+    });
+
+    it('refuses a read collaborator pinning', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
+      const item = await addMovie(owner, list.id);
+
+      const res = await friend.post(
+        `/mediaLists/${list.id}/items/${item.id}/pinned`
+      );
+
+      assert.strictEqual(res.status, 403);
     });
   });
 
@@ -369,6 +495,7 @@ describe('media list routes', () => {
       const friend = await asFriend();
       const list = await createList(owner);
       await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
       const item = await addMovie(owner, list.id);
 
       // A read-only collaborator may still record what they watched.
@@ -380,11 +507,36 @@ describe('media list routes', () => {
       const forFriend = await friend.get(`/mediaLists/${list.id}/items`);
       const forOwner = await owner.get(`/mediaLists/${list.id}/items`);
 
-      assert.strictEqual(forFriend.body[0].watched, true);
-      assert.strictEqual(forOwner.body[0].watched, false);
+      assert.strictEqual(forFriend.body.results[0].watched, true);
+      assert.strictEqual(forOwner.body.results[0].watched, false);
       // The owner sees who has finished it.
-      assert.strictEqual(forOwner.body[0].seenBy.length, 1);
-      assert.strictEqual(forOwner.body[0].seenBy[0].id, await friendId());
+      assert.strictEqual(forOwner.body.results[0].seenBy.length, 1);
+      assert.strictEqual(
+        forOwner.body.results[0].seenBy[0].id,
+        await friendId()
+      );
+    });
+
+    // The owner holds no collaborator row, so resolving seen-by against the collaborator
+    // table alone drops the badge of the person who created the list.
+    it('shows the owner among the members who have seen a title', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+      await acceptInvite(friend, list.id);
+      const item = await addMovie(owner, list.id);
+
+      await owner.post(`/mediaLists/${list.id}/items/${item.id}/watched`);
+
+      const forFriend = await friend.get(`/mediaLists/${list.id}/items`);
+
+      assert.deepStrictEqual(
+        forFriend.body.results[0].seenBy.map(
+          (member: { id: number }) => member.id
+        ),
+        [await ownerId()]
+      );
     });
 
     it('unmarks a movie', async () => {
@@ -399,7 +551,7 @@ describe('media list routes', () => {
 
       assert.strictEqual(cleared.status, 204);
       const listed = await owner.get(`/mediaLists/${list.id}/items`);
-      assert.strictEqual(listed.body[0].watched, false);
+      assert.strictEqual(listed.body.results[0].watched, false);
     });
 
     it('refuses the movie action on a series', async () => {
@@ -442,11 +594,11 @@ describe('media list routes', () => {
       );
 
       assert.deepStrictEqual(
-        seen.body.map((item: { tmdbId: number }) => item.tmdbId),
+        seen.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [2]
       );
       assert.deepStrictEqual(
-        unseen.body.map((item: { tmdbId: number }) => item.tmdbId),
+        unseen.body.results.map((item: { tmdbId: number }) => item.tmdbId),
         [1]
       );
     });
@@ -539,6 +691,7 @@ describe('media list routes', () => {
       const list = await createList(owner);
       const userId = await friendId();
       await shareWith(owner, list.id, userId, 'read');
+      await acceptInvite(friend, list.id);
 
       const left = await friend.delete(
         `/mediaLists/${list.id}/collaborators/${userId}`
@@ -546,6 +699,76 @@ describe('media list routes', () => {
 
       assert.strictEqual(left.status, 204);
       assert.strictEqual((await friend.get('/mediaLists')).body.length, 0);
+    });
+  });
+
+  describe('invites', () => {
+    it('lists a pending invite with an item count and drops it once accepted', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await addMovie(owner, list.id);
+      await shareWith(owner, list.id, await friendId(), 'read');
+
+      const before = await friend.get('/mediaLists/invites');
+      assert.strictEqual(before.body.length, 1);
+      assert.strictEqual(before.body[0].listId, list.id);
+      assert.strictEqual(before.body[0].listName, list.name);
+      assert.strictEqual(before.body[0].itemCount, 1);
+      assert.strictEqual(before.body[0].invitedBy.id, await ownerId());
+      // Not accepted yet, so it must not show up as a reachable list either.
+      assert.strictEqual((await friend.get('/mediaLists')).body.length, 0);
+
+      await acceptInvite(friend, list.id);
+
+      assert.strictEqual(
+        (await friend.get('/mediaLists/invites')).body.length,
+        0
+      );
+      assert.strictEqual((await friend.get('/mediaLists')).body.length, 1);
+    });
+
+    it('is final on reject, and a fresh invite can follow', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+      await shareWith(owner, list.id, await friendId(), 'read');
+
+      const rejected = await friend.post(
+        `/mediaLists/${list.id}/invite/reject`
+      );
+      assert.strictEqual(rejected.status, 204);
+      assert.strictEqual(
+        (await friend.get('/mediaLists/invites')).body.length,
+        0
+      );
+
+      // No un-reject: acting on the same invite again is a 404, not idempotent.
+      const acceptAfterReject = await friend.post(
+        `/mediaLists/${list.id}/invite/accept`
+      );
+      assert.strictEqual(acceptAfterReject.status, 404);
+
+      // The owner sends a fresh invite, which the friend can accept normally.
+      await shareWith(owner, list.id, await friendId(), 'write');
+      const reinvited = await friend.get('/mediaLists/invites');
+      assert.strictEqual(reinvited.body.length, 1);
+      assert.strictEqual(reinvited.body[0].role, 'write');
+    });
+
+    it('is 404 for someone with no pending invite', async () => {
+      const owner = await asOwner();
+      const friend = await asFriend();
+      const list = await createList(owner);
+
+      assert.strictEqual(
+        (await friend.post(`/mediaLists/${list.id}/invite/accept`)).status,
+        404
+      );
+      assert.strictEqual(
+        (await friend.post(`/mediaLists/${list.id}/invite/reject`)).status,
+        404
+      );
     });
   });
 });

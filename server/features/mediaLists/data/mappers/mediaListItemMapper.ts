@@ -13,6 +13,9 @@ export const toMediaListItem = (
   tmdbId: record.tmdbId,
   mediaType: record.mediaType,
   position: record.position,
+  status: record.media?.status ?? null,
   addedBy: toOptionalUserRef(record.addedBy),
+  pinnedAt: record.pinnedAt ?? null,
   createdAt: record.createdAt,
+  updatedAt: record.updatedAt,
 });

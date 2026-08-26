@@ -2,16 +2,16 @@ import Modal from '@app/components/Common/Modal';
 import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaListMutations';
 import type { MediaList } from '@app/domain/mediaLists/models/MediaList';
 import useToasts from '@app/hooks/useToasts';
+import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.DeleteWatchlistModal', {
-  title: 'Delete watchlist',
+  title: 'Delete Watchlist',
   confirm: 'Are you sure you want to delete {name}? This cannot be undone.',
   sharednote:
     'Anyone it was shared with loses access, and their watched history for it goes too.',
-  delete: 'Delete',
   success: 'Watchlist deleted.',
   failed: 'Something went wrong deleting the watchlist.',
 });
@@ -46,7 +46,7 @@ const DeleteWatchlistModal = ({
     >
       <Modal
         title={intl.formatMessage(messages.title)}
-        okText={intl.formatMessage(messages.delete)}
+        okText={intl.formatMessage(globalMessages.delete)}
         okButtonType="danger"
         onOk={async () => {
           if (!list) {

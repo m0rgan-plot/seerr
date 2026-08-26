@@ -5,6 +5,8 @@ import { toHttpError } from '@server/features/mediaLists/presentation/routes/err
 import {
   addMediaListItemSchema,
   itemFilterSchema,
+  itemPageSchema,
+  itemSortBySchema,
   listIdParam,
   reorderMediaListSchema,
 } from '@server/features/mediaLists/presentation/schemas/mediaListSchemas';
@@ -21,24 +23,36 @@ router.get('/', async (req, res, next) => {
   try {
     const listId = listIdParam.parse(params(req).mediaListId);
     const filter = itemFilterSchema.parse(req.query.filter ?? 'all');
+    const sortBy = itemSortBySchema.parse(req.query.sortBy ?? 'added');
+    const page = itemPageSchema.parse(req.query.page ?? 1);
     const { views } = getMediaListServices();
 
-    const items = await views.itemViewsFor(listId, req.user!.id, filter);
-    const members = await views.collaboratorsFor(listId);
+    const itemPage = await views.itemViewsFor(
+      listId,
+      req.user!.id,
+      filter,
+      sortBy,
+      page
+    );
+    const members = await views.membersFor(listId);
 
     // Resolving the seen-by ids once for the whole page rather than per item.
     const byId = new Map(members.map((member) => [member.id, member]));
 
-    return res.status(200).json(
-      items.map((view) =>
+    return res.status(200).json({
+      page: itemPage.page,
+      totalResults: itemPage.totalResults,
+      totalPages: itemPage.totalPages,
+      seenCount: itemPage.seenCount,
+      results: itemPage.results.map((view) =>
         toMediaListItemDto(
           view,
           view.seenByUserIds
             .map((userId) => byId.get(userId))
             .filter((member): member is NonNullable<typeof member> => !!member)
         )
-      )
-    );
+      ),
+    });
   } catch (error) {
     return next(toHttpError(error));
   }
@@ -84,6 +98,36 @@ router.post('/reorder', async (req, res, next) => {
     const { items } = getMediaListServices();
 
     await items.reorder(listId, req.user!.id, body.orderedItemIds);
+
+    return res.status(204).send();
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+// Pinning edits the shared list, unlike the per-member /watched routes, so it stays
+// behind editListItems rather than the read-only-friendly track-progress check.
+router.post('/:itemId/pinned', async (req, res, next) => {
+  try {
+    const listId = listIdParam.parse(params(req).mediaListId);
+    const itemId = listIdParam.parse(params(req).itemId);
+    const { items } = getMediaListServices();
+
+    await items.setPinned(listId, itemId, req.user!.id, true);
+
+    return res.status(204).send();
+  } catch (error) {
+    return next(toHttpError(error));
+  }
+});
+
+router.delete('/:itemId/pinned', async (req, res, next) => {
+  try {
+    const listId = listIdParam.parse(params(req).mediaListId);
+    const itemId = listIdParam.parse(params(req).itemId);
+    const { items } = getMediaListServices();
+
+    await items.setPinned(listId, itemId, req.user!.id, false);
 
     return res.status(204).send();
   } catch (error) {

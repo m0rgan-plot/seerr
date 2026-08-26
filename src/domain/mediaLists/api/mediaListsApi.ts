@@ -5,7 +5,10 @@ import type {
   MediaListSummaryDto,
 } from '@app/domain/mediaLists/api/dto';
 import type { CollaboratorRole } from '@app/domain/mediaLists/models/Collaborator';
-import type { MediaListItemFilter } from '@app/domain/mediaLists/models/MediaListItem';
+import type {
+  MediaListItemFilter,
+  MediaListItemSortBy,
+} from '@app/domain/mediaLists/models/MediaListItem';
 import type { MediaType } from '@server/constants/media';
 import axios from 'axios';
 
@@ -14,13 +17,31 @@ import axios from 'axios';
 
 export const mediaListsKey = '/api/v1/mediaLists';
 
+export const invitesKey = `${mediaListsKey}/invites`;
+
+export const membershipKey = (tmdbId: number, mediaType: MediaType) =>
+  `${mediaListsKey}/membership?tmdbId=${tmdbId}&mediaType=${mediaType}`;
+
 export const listKey = (mediaListId: number) =>
   `${mediaListsKey}/${mediaListId}`;
 
-export const itemsKey = (mediaListId: number, filter?: MediaListItemFilter) =>
-  filter && filter !== 'all'
-    ? `${listKey(mediaListId)}/items?filter=${filter}`
-    : `${listKey(mediaListId)}/items`;
+export const itemsKey = (
+  mediaListId: number,
+  page: number,
+  filter?: MediaListItemFilter,
+  sortBy?: MediaListItemSortBy
+) => {
+  const params: Record<string, string> = { page: String(page) };
+  if (filter && filter !== 'all') {
+    params.filter = filter;
+  }
+  if (sortBy && sortBy !== 'added') {
+    params.sortBy = sortBy;
+  }
+
+  const query = new URLSearchParams(params).toString();
+  return `${listKey(mediaListId)}/items?${query}`;
+};
 
 export const progressKey = (mediaListId: number, itemId: number) =>
   `${listKey(mediaListId)}/items/${itemId}/progress`;
@@ -71,6 +92,15 @@ export const reorderMediaListItems = async (
   await axios.post(`${listKey(mediaListId)}/items/reorder`, {
     orderedItemIds,
   });
+};
+
+export const setPinned = async (
+  mediaListId: number,
+  itemId: number,
+  pinned: boolean
+): Promise<void> => {
+  const url = `${itemKey(mediaListId, itemId)}/pinned`;
+  await (pinned ? axios.post(url) : axios.delete(url));
 };
 
 export const setMovieWatched = async (
@@ -134,4 +164,19 @@ export const removeCollaborator = async (
   userId: number
 ): Promise<void> => {
   await axios.delete(`${collaboratorsKey(mediaListId)}/${userId}`);
+};
+
+export const acceptWatchlistInvite = async (
+  mediaListId: number
+): Promise<MediaListCollaboratorDto> =>
+  (
+    await axios.post<MediaListCollaboratorDto>(
+      `${listKey(mediaListId)}/invite/accept`
+    )
+  ).data;
+
+export const rejectWatchlistInvite = async (
+  mediaListId: number
+): Promise<void> => {
+  await axios.post(`${listKey(mediaListId)}/invite/reject`);
 };

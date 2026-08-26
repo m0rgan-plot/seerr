@@ -26,15 +26,16 @@ export class NotificationGatewayImpl implements NotificationGateway {
     const canEdit = input.role === CollaboratorRole.WRITE;
 
     this.send(Notification.MEDIA_LIST_SHARED, {
+      event: 'Watchlist Invite',
       subject: input.list.name,
-      message: `${input.invitedBy.displayName} shared a watchlist with you. You can ${
+      message: `${input.invitedBy.displayName} invited you to a watchlist. Accept the invite to ${
         canEdit ? 'add and remove titles' : 'view it'
       }.`,
       notifyUser: recipient,
       extra: [
         { name: 'Watchlist', value: input.list.name },
-        { name: 'Shared by', value: input.invitedBy.displayName },
-        { name: 'Access', value: canEdit ? 'Can edit' : 'Can view' },
+        { name: 'Invited by', value: input.invitedBy.displayName },
+        { name: 'Access offered', value: canEdit ? 'Can edit' : 'Can view' },
       ],
     });
   }
@@ -55,6 +56,7 @@ export class NotificationGatewayImpl implements NotificationGateway {
       .filter((recipient): recipient is User => !!recipient)
       .forEach((recipient) => {
         this.send(Notification.MEDIA_LIST_ITEM_ADDED, {
+          event: 'Watchlist Updated',
           subject: input.list.name,
           message: `${input.addedBy.displayName} added a title to ${input.list.name}.`,
           notifyUser: recipient,
@@ -70,11 +72,22 @@ export class NotificationGatewayImpl implements NotificationGateway {
     type: Notification,
     payload: Omit<NotificationPayload, 'notifySystem' | 'notifyAdmin'>
   ): void {
-    notificationManager.sendNotification(type, {
-      ...payload,
-      notifySystem: true,
-      notifyAdmin: false,
-    });
+    try {
+      notificationManager.sendNotification(type, {
+        ...payload,
+        notifySystem: true,
+        notifyAdmin: false,
+      });
+    } catch (e) {
+      // Agents are handed the payload synchronously, so one throwing agent would
+      // otherwise surface as a failed add or share that has in fact already been
+      // written, and the client would retry into a conflict.
+      logger.error('Unable to send watchlist notification', {
+        label: 'Media Lists',
+        notificationType: Notification[type],
+        errorMessage: e.message,
+      });
+    }
   }
 
   private async resolveUser(userId: number): Promise<User | null> {

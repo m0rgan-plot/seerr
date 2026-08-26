@@ -1,6 +1,7 @@
 import TheMovieDb from '@server/api/themoviedb';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import type { SeasonEpisodeCount } from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
+import logger from '@server/logger';
 
 // Reads go through TheMovieDb, which caches responses via ExternalAPI, so deriving
 // progress on every request does not turn into a TMDB call per item.
@@ -10,12 +11,24 @@ export class TmdbTvMetadataProvider implements TvMetadataProvider {
   public async getSeasonEpisodeCounts(
     tmdbId: number
   ): Promise<SeasonEpisodeCount[]> {
-    const show = await this.tmdb.getTvShow({ tvId: tmdbId });
+    try {
+      const show = await this.tmdb.getTvShow({ tvId: tmdbId });
 
-    return show.seasons.map((season) => ({
-      seasonNumber: season.season_number,
-      episodeCount: season.episode_count,
-    }));
+      return show.seasons.map((season) => ({
+        seasonNumber: season.season_number,
+        episodeCount: season.episode_count,
+      }));
+    } catch (e) {
+      // Progress is derived from these counts on every read of every list holding the
+      // title, so letting one unknown id throw would take the whole page down for good.
+      // Without counts the show simply reads as zero episodes.
+      logger.debug('Unable to resolve watchlist season counts', {
+        label: 'Media Lists',
+        tmdbId,
+        errorMessage: e.message,
+      });
+      return [];
+    }
   }
 
   public async getSeasonEpisodeNumbers(

@@ -23,6 +23,11 @@ export const addMediaListItemSchema = z.object({
   mediaType: z.nativeEnum(MediaType),
 });
 
+export const mediaMembershipQuerySchema = z.object({
+  tmdbId: z.coerce.number().int().positive(),
+  mediaType: z.nativeEnum(MediaType),
+});
+
 export const reorderMediaListSchema = z.object({
   orderedItemIds: z.array(z.coerce.number().int().positive()).min(1),
 });
@@ -39,5 +44,9 @@ export const updateCollaboratorRoleSchema = z.object({
 export const itemFilterSchema = z
   .enum(['all', 'unseen', 'inprogress', 'seen'])
   .default('all');
+
+export const itemSortBySchema = z.enum(['added', 'title']).default('added');
+
+export const itemPageSchema = z.coerce.number().int().positive().default(1);
 
 export const listIdParam = z.coerce.number().int().positive();

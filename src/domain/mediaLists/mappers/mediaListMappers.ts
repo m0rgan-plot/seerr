@@ -1,12 +1,14 @@
 import type {
   MediaListCollaboratorDto,
   MediaListDto,
+  MediaListInviteDto,
   MediaListItemDto,
   MediaListItemProgressDto,
   MediaListSummaryDto,
   MediaListUserDto,
 } from '@app/domain/mediaLists/api/dto';
 import type { Collaborator } from '@app/domain/mediaLists/models/Collaborator';
+import type { WatchlistInvite } from '@app/domain/mediaLists/models/Invite';
 import type {
   MediaList,
   MediaListSummary,
@@ -38,6 +40,8 @@ export const toMediaList = (dto: MediaListDto): MediaList => ({
   role: dto.role,
   createdAt: new Date(dto.createdAt),
   updatedAt: new Date(dto.updatedAt),
+  sharedWith: dto.sharedWith.map(toUser),
+  sharedWithCount: dto.sharedWithCount,
 });
 
 export const toMediaListSummary = (
@@ -47,9 +51,17 @@ export const toMediaListSummary = (
   itemCount: dto.itemCount,
   seenCount: dto.seenCount,
   previewItems: dto.previewItems.map((item) => ({
+    id: item.id,
     tmdbId: item.tmdbId,
     mediaType: item.mediaType,
+    title: item.title,
     posterPath: item.posterPath,
+    year: item.year,
+    watched: item.watched,
+    status: item.status,
+    createdAt: new Date(item.createdAt),
+    addedBy: toOptionalUser(item.addedBy),
+    pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
   })),
 });
 
@@ -62,8 +74,11 @@ export const toMediaListItem = (dto: MediaListItemDto): MediaListItem => ({
   posterPath: dto.posterPath,
   year: dto.year,
   position: dto.position,
+  status: dto.status,
   addedBy: toOptionalUser(dto.addedBy),
+  pinnedAt: dto.pinnedAt ? new Date(dto.pinnedAt) : null,
   createdAt: new Date(dto.createdAt),
+  updatedAt: new Date(dto.updatedAt),
   watched: dto.watched,
   progress: dto.progress
     ? {
@@ -96,6 +111,18 @@ export const toCollaborator = (
 ): Collaborator => ({
   user: toUser(dto.user),
   role: dto.role,
+  status: dto.status,
   invitedBy: toOptionalUser(dto.invitedBy),
+  createdAt: new Date(dto.createdAt),
+});
+
+export const toWatchlistInvite = (
+  dto: MediaListInviteDto
+): WatchlistInvite => ({
+  listId: dto.listId,
+  listName: dto.listName,
+  role: dto.role,
+  invitedBy: toOptionalUser(dto.invitedBy),
+  itemCount: dto.itemCount,
   createdAt: new Date(dto.createdAt),
 });

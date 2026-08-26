@@ -1,12 +1,15 @@
 import type { MediaType } from '@server/constants/media';
 import type { Collaborator } from '@server/features/mediaLists/domain/entities/Collaborator';
 import type { MediaList } from '@server/features/mediaLists/domain/entities/MediaList';
+import type { MediaListInvite } from '@server/features/mediaLists/domain/entities/MediaListInvite';
 import type { MediaListItem } from '@server/features/mediaLists/domain/entities/MediaListItem';
 import type { NotificationGateway } from '@server/features/mediaLists/domain/ports/NotificationGateway';
 import type { TvMetadataProvider } from '@server/features/mediaLists/domain/ports/TvMetadataProvider';
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type {
   AddMediaListItemInput,
+  FindPageInListOptions,
+  MediaListItemPage,
   MediaListItemRepository,
 } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
 import type {
@@ -16,6 +19,7 @@ import type {
 } from '@server/features/mediaLists/domain/repositories/MediaListRepository';
 import type { MediaListWatchRepository } from '@server/features/mediaLists/domain/repositories/MediaListWatchRepository';
 import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
 import type {
   EpisodeRef,
@@ -46,7 +50,9 @@ export class FakeMediaListRepository implements MediaListRepository {
 
   async findAccessibleTo(userId: number): Promise<MediaList[]> {
     const shared = (this.collaborators?.rows ?? [])
-      .filter((row) => row.user.id === userId)
+      .filter(
+        (row) => row.user.id === userId && row.status === InviteStatus.ACCEPTED
+      )
       .map((row) => row.listId);
 
     return this.lists.filter(
@@ -86,6 +92,14 @@ export class FakeMediaListRepository implements MediaListRepository {
   async delete(id: number): Promise<void> {
     this.lists = this.lists.filter((list) => list.id !== id);
   }
+
+  async touch(id: number): Promise<void> {
+    const list = this.lists.find((candidate) => candidate.id === id);
+    if (!list) {
+      throw new Error(`no list ${id}`);
+    }
+    list.updatedAt = new Date();
+  }
 }
 
 export class FakeMediaListItemRepository implements MediaListItemRepository {
@@ -99,9 +113,46 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
   }
 
   async findByList(listId: number): Promise<MediaListItem[]> {
+    // Mirrors the TypeORM repository: pinned items lead, most recently pinned first,
+    // ahead of everything unpinned most-recently-added first.
     return this.items
       .filter((item) => item.listId === listId)
-      .sort((a, b) => a.position - b.position);
+      .sort((a, b) => {
+        if (!!a.pinnedAt !== !!b.pinnedAt) {
+          return a.pinnedAt ? -1 : 1;
+        }
+        if (a.pinnedAt && b.pinnedAt) {
+          return b.pinnedAt.getTime() - a.pinnedAt.getTime();
+        }
+        return b.position - a.position;
+      });
+  }
+
+  async findPageInList(
+    listId: number,
+    { skip = 0, take }: FindPageInListOptions
+  ): Promise<MediaListItemPage> {
+    // Mirrors the TypeORM repository: same order as findByList, pinned items lead
+    // (most recently pinned first), then everything unpinned most-recently-added first.
+    const ordered = this.items
+      .filter((item) => item.listId === listId)
+      .sort((a, b) => {
+        if (!!a.pinnedAt !== !!b.pinnedAt) {
+          return a.pinnedAt ? -1 : 1;
+        }
+        if (a.pinnedAt && b.pinnedAt) {
+          return b.pinnedAt.getTime() - a.pinnedAt.getTime();
+        }
+        return b.position - a.position;
+      });
+
+    return {
+      items:
+        take === undefined
+          ? ordered.slice(skip)
+          : ordered.slice(skip, skip + take),
+      total: ordered.length,
+    };
   }
 
   async findInList(
@@ -127,8 +178,12 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
       tmdbId: input.tmdbId,
       mediaType: input.mediaType,
       position: siblings.length,
+      // Nothing has requested a title the moment it is put on a list.
+      status: null,
       addedBy: this.users.get(input.addedById) ?? user(input.addedById),
+      pinnedAt: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
     this.items.push(item);
     return item;
@@ -138,25 +193,80 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
     this.items = this.items.filter((item) => item.id !== itemId);
   }
 
+  async pin(itemId: number): Promise<void> {
+    const item = this.items.find((candidate) => candidate.id === itemId);
+    if (item) {
+      item.pinnedAt = new Date();
+    }
+  }
+
+  async unpin(itemId: number): Promise<void> {
+    const item = this.items.find((candidate) => candidate.id === itemId);
+    if (item) {
+      item.pinnedAt = null;
+    }
+  }
+
   async applyOrder(listId: number, orderedItemIds: number[]): Promise<void> {
+    // Mirrors the TypeORM repository: reads sort position DESC, so the first id here
+    // has to land on the highest position for the given order to come back unchanged.
+    const lastIndex = orderedItemIds.length - 1;
     orderedItemIds.forEach((itemId, index) => {
       const item = this.items.find(
         (candidate) => candidate.id === itemId && candidate.listId === listId
       );
       if (item) {
-        item.position = index;
+        item.position = lastIndex - index;
       }
     });
+  }
+
+  async findItemsContaining(
+    listIds: number[],
+    tmdbId: number,
+    mediaType: MediaType
+  ): Promise<{ listId: number; itemId: number }[]> {
+    return this.items
+      .filter(
+        (item) =>
+          listIds.includes(item.listId) &&
+          item.tmdbId === tmdbId &&
+          item.mediaType === mediaType
+      )
+      .map((item) => ({ listId: item.listId, itemId: item.id }));
   }
 }
 
 export class FakeMediaListCollaboratorRepository implements MediaListCollaboratorRepository {
   public rows: (Collaborator & { listId: number })[] = [];
+  // Records every call's argument list, so a test can assert the batched lookup fires
+  // once per request rather than once per list.
+  public findByListsCalls: number[][] = [];
+  // Set by the harness to the same array FakeMediaListRepository holds, once both exist.
+  // findPendingInvitesFor is the only method here that needs to look a list up.
+  public lists: MediaList[] = [];
 
   constructor(private readonly users: Map<number, UserRef>) {}
 
   async findByList(listId: number): Promise<Collaborator[]> {
     return this.rows.filter((row) => row.listId === listId);
+  }
+
+  async findByLists(listIds: number[]): Promise<Map<number, Collaborator[]>> {
+    this.findByListsCalls.push(listIds);
+
+    const byList = new Map<number, Collaborator[]>();
+    this.rows
+      .filter(
+        (row) =>
+          listIds.includes(row.listId) && row.status === InviteStatus.ACCEPTED
+      )
+      .forEach((row) => {
+        const collaborators = byList.get(row.listId) ?? [];
+        collaborators.push(row);
+        byList.set(row.listId, collaborators);
+      });
+    return byList;
   }
 
   async findRole(
@@ -169,6 +279,47 @@ export class FakeMediaListCollaboratorRepository implements MediaListCollaborato
     );
   }
 
+  async findAcceptedRole(
+    listId: number,
+    userId: number
+  ): Promise<CollaboratorRole | null> {
+    return (
+      this.rows.find(
+        (row) =>
+          row.listId === listId &&
+          row.user.id === userId &&
+          row.status === InviteStatus.ACCEPTED
+      )?.role ?? null
+    );
+  }
+
+  async findPendingInvite(
+    listId: number,
+    userId: number
+  ): Promise<Collaborator | null> {
+    return (
+      this.rows.find(
+        (row) =>
+          row.listId === listId &&
+          row.user.id === userId &&
+          row.status === InviteStatus.PENDING
+      ) ?? null
+    );
+  }
+
+  async findPendingInvitesFor(userId: number): Promise<MediaListInvite[]> {
+    return this.rows
+      .filter(
+        (row) => row.user.id === userId && row.status === InviteStatus.PENDING
+      )
+      .map((row) => ({
+        list: this.lists.find((list) => list.id === row.listId) as MediaList,
+        role: row.role,
+        invitedBy: row.invitedBy,
+        createdAt: row.createdAt,
+      }));
+  }
+
   async add(input: {
     listId: number;
     userId: number;
@@ -179,10 +330,22 @@ export class FakeMediaListCollaboratorRepository implements MediaListCollaborato
       listId: input.listId,
       user: this.users.get(input.userId) ?? user(input.userId),
       role: input.role,
+      status: InviteStatus.PENDING,
       invitedBy: this.users.get(input.invitedById) ?? user(input.invitedById),
       createdAt: new Date(),
     };
     this.rows.push(row);
+    return row;
+  }
+
+  async accept(listId: number, userId: number): Promise<Collaborator> {
+    const row = this.rows.find(
+      (candidate) => candidate.listId === listId && candidate.user.id === userId
+    );
+    if (!row) {
+      throw new Error('no collaborator');
+    }
+    row.status = InviteStatus.ACCEPTED;
     return row;
   }
 

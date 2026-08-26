@@ -1,4 +1,4 @@
-import type { MediaType } from '@server/constants/media';
+import type { MediaStatus, MediaType } from '@server/constants/media';
 
 // Wire shapes for /api/v1/mediaLists. Defined once and imported by both the response
 // mapper and the frontend, so the two cannot drift apart.
@@ -17,9 +17,23 @@ export interface MediaListItemRef {
 }
 
 export interface MediaListPreviewItem extends MediaListItemRef {
+  id: number;
+  // Resolved from TMDB alongside the poster. Null when TMDB no longer knows the title.
+  title: string | null;
   // Relative TMDB path, or null when there is no art. Clients build the full URL the
   // same way they do everywhere else.
   posterPath: string | null;
+  year: number | null;
+  // The requesting member's own state, so the poster strip can offer the right CTA.
+  watched: boolean;
+  // Where the title stands in the library. Null when nothing has ever tracked it.
+  status: MediaStatus | null;
+  createdAt: string;
+  // Null once the person who added it is deleted. The item stays.
+  addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Non-null sorts it to the top of
+  // the strip ahead of anything unpinned, most recently pinned first.
+  pinnedAt: string | null;
 }
 
 export interface MediaListSeasonProgress {
@@ -44,6 +58,11 @@ export interface MediaList {
   role: MediaListRole;
   createdAt: string;
   updatedAt: string;
+  // Who the list is shared with, for the shared-with avatar badges (shelf row and
+  // detail header alike). Capped server-side; sharedWithCount is the true total, for
+  // an overflow "+N" affordance.
+  sharedWith: MediaListUser[];
+  sharedWithCount: number;
 }
 
 export interface MediaListSummary extends MediaList {
@@ -63,8 +82,15 @@ export interface MediaListItem {
   posterPath: string | null;
   year: number | null;
   position: number;
+  // Availability in the library, which decides whether the card offers a request or
+  // reports one already in flight. Separate from watched, which is per member.
+  status: MediaStatus | null;
   addedBy: MediaListUser | null;
+  // When the title was pinned, or null when it isn't. Non-null sorts it to the top of
+  // the list ahead of `position`, most recently pinned first.
+  pinnedAt: string | null;
   createdAt: string;
+  updatedAt: string;
   // The requesting member's own state. Null progress means the title is a movie.
   watched: boolean;
   progress: MediaListShowProgress | null;
@@ -83,13 +109,42 @@ export interface MediaListItemProgress {
   episodes: MediaListEpisodeRef[];
 }
 
+export type MediaListInviteStatus = 'pending' | 'accepted';
+
 export interface MediaListCollaborator {
   user: MediaListUser;
   role: Exclude<MediaListRole, 'owner'>;
+  status: MediaListInviteStatus;
   invitedBy: MediaListUser | null;
   createdAt: string;
 }
 
+// A pending invite as seen by the invited user. Carries an item count but never the
+// items themselves, so accepting or rejecting is never a decision made on list contents.
+export interface MediaListInvite {
+  listId: number;
+  listName: string;
+  role: Exclude<MediaListRole, 'owner'>;
+  invitedBy: MediaListUser | null;
+  itemCount: number;
+  createdAt: string;
+}
+
+// Which of the caller's own lists already hold a given title, keyed off tmdbId +
+// mediaType, with the item id on each so the caller can remove it again. Backs the
+// media page's Add to Watchlist button.
+export interface MediaListMembership {
+  items: { listId: number; itemId: number }[];
+}
+
 export type MediaListsResponse = MediaListSummary[];
-export type MediaListItemsResponse = MediaListItem[];
+export interface MediaListItemsResponse {
+  page: number;
+  totalResults: number;
+  totalPages: number;
+  // Across the whole list for this filter's underlying scope, not just this page.
+  seenCount: number;
+  results: MediaListItem[];
+}
 export type MediaListCollaboratorsResponse = MediaListCollaborator[];
+export type MediaListInvitesResponse = MediaListInvite[];

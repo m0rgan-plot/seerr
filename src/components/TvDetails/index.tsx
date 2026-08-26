@@ -25,6 +25,7 @@ import RequestModal from '@app/components/RequestModal';
 import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
 import Season from '@app/components/TvDetails/Season';
+import AddToWatchlistButton from '@app/components/Watchlists/AddToWatchlistButton';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
@@ -664,6 +665,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                 )}
               </>
             )}
+          <AddToWatchlistButton mediaType="tv" tmdbId={data.id} />
           <div className="z-20">
             <PlayButton links={mediaLinks} />
           </div>

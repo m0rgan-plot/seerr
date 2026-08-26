@@ -33,6 +33,23 @@ export class MediaListItemService {
     return this.items.findByList(listId);
   }
 
+  // Which of the caller's own lists (owned or shared with them) already hold this
+  // title, and the item id on each one, for the media page's "Add to Watchlist" button
+  // to show as already added -- and let a repeat click remove it -- without a click
+  // first.
+  public async itemsContaining(
+    userId: number,
+    tmdbId: number,
+    mediaType: MediaType
+  ): Promise<{ listId: number; itemId: number }[]> {
+    const lists = await this.listService.listsFor(userId);
+    return this.items.findItemsContaining(
+      lists.map((list) => list.id),
+      tmdbId,
+      mediaType
+    );
+  }
+
   public async add(input: {
     listId: number;
     tmdbId: number;
@@ -60,6 +77,7 @@ export class MediaListItemService {
       mediaType: input.mediaType,
       addedById: input.actor.id,
     });
+    await this.listService.touch(input.listId);
 
     // Everyone with access hears about it except whoever added it.
     const collaborators = await this.collaborators.findByList(input.listId);
@@ -97,6 +115,32 @@ export class MediaListItemService {
     }
 
     await this.items.remove(itemId);
+    await this.listService.touch(listId);
+  }
+
+  public async setPinned(
+    listId: number,
+    itemId: number,
+    userId: number,
+    pinned: boolean
+  ): Promise<void> {
+    const list = await this.listService.requireList(listId);
+    this.access.assertCan(
+      await this.listService.membershipFor(list, userId),
+      'editListItems'
+    );
+
+    const item = await this.items.findById(itemId);
+    if (!item || item.listId !== listId) {
+      throw new ItemNotFoundInListError();
+    }
+
+    if (pinned) {
+      await this.items.pin(itemId);
+    } else {
+      await this.items.unpin(itemId);
+    }
+    await this.listService.touch(listId);
   }
 
   public async reorder(

@@ -13,19 +13,19 @@ import * as Yup from 'yup';
 const messages = defineMessages(
   'components.Watchlists.CreateEditWatchlistModal',
   {
-    createtitle: 'New watchlist',
-    edittitle: 'Edit watchlist',
+    createtitle: 'New Watchlist',
+    edittitle: 'Edit Watchlist',
     name: 'Name',
     nameplaceholder: 'Sunday Night Sci-Fi',
     namerequired: 'You must provide a name',
     description: 'Description',
     descriptionhint: 'Shown on the list and to anyone you share it with.',
-    create: 'Create watchlist',
+    create: 'Create Watchlist',
     createsuccess: 'Watchlist created.',
     createfailed: 'Something went wrong creating the watchlist.',
     editsuccess: 'Watchlist updated.',
     editfailed: 'Something went wrong updating the watchlist.',
-    deletelist: 'Delete list',
+    deletelist: 'Delete List',
   }
 );
 
@@ -158,6 +158,9 @@ const CreateEditWatchlistModal = ({
               <div className="form-row">
                 <label htmlFor="description" className="text-label">
                   {intl.formatMessage(messages.description)}
+                  <span className="label-tip">
+                    {intl.formatMessage(messages.descriptionhint)}
+                  </span>
                 </label>
                 <div className="form-input-area">
                   <Field
@@ -166,9 +169,6 @@ const CreateEditWatchlistModal = ({
                     as="textarea"
                     rows="3"
                   />
-                  <div className="mt-1 text-xs text-gray-500">
-                    {intl.formatMessage(messages.descriptionhint)}
-                  </div>
                   {errors.description && touched.description && (
                     <div className="error">{errors.description}</div>
                   )}

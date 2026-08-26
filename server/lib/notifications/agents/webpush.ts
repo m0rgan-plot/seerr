@@ -94,7 +94,11 @@ class WebPushAgent
 
     let message: string | undefined;
     switch (type) {
+      // These arrive with their copy already written, because it depends on who did what
+      // to whom rather than on a request or an issue the agent could read it from.
       case Notification.TEST_NOTIFICATION:
+      case Notification.MEDIA_LIST_SHARED:
+      case Notification.MEDIA_LIST_ITEM_ADDED:
         message = payload.message;
         break;
       case Notification.MEDIA_AUTO_REQUESTED:

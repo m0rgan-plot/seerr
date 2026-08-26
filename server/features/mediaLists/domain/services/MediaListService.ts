@@ -17,7 +17,9 @@ export class MediaListService {
     list: MediaList,
     userId: number
   ): Promise<MediaListMembership> {
-    const role = await this.collaborators.findRole(list.id, userId);
+    // Only an accepted row grants access. findRole (any status) is reserved for
+    // collaborator management, which needs to see a pending row too.
+    const role = await this.collaborators.findAcceptedRole(list.id, userId);
     return this.access.resolveMembership(list, userId, role);
   }
 
@@ -74,5 +76,11 @@ export class MediaListService {
     const list = await this.requireList(listId);
     this.access.assertCan(await this.membershipFor(list, userId), 'deleteList');
     await this.lists.delete(listId);
+  }
+
+  // For callers that change a list's contents (items) rather than its own name or
+  // description, so "Last Modified" on the index reflects that too.
+  public async touch(listId: number): Promise<void> {
+    await this.lists.touch(listId);
   }
 }

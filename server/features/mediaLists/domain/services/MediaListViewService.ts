@@ -16,6 +16,7 @@ import type {
 import type { MediaListAccessPolicy } from '@server/features/mediaLists/domain/services/MediaListAccessPolicy';
 import type { MediaListProgressCalculator } from '@server/features/mediaLists/domain/services/MediaListProgressCalculator';
 import type { MediaListService } from '@server/features/mediaLists/domain/services/MediaListService';
+import type { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import type { MediaListMembership } from '@server/features/mediaLists/domain/valueObjects/MediaListMembership';
 import type { UserRef } from '@server/features/mediaLists/domain/valueObjects/UserRef';
 import type {
@@ -24,6 +25,17 @@ import type {
 } from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
 
 export type MediaListItemFilter = 'all' | 'unseen' | 'inprogress' | 'seen';
+export type MediaListItemSortBy = 'added' | 'title';
+
+export interface MediaListItemViewPage {
+  results: MediaListItemView[];
+  page: number;
+  totalResults: number;
+  totalPages: number;
+  // Across the whole list for this filter's underlying scope, not just the loaded
+  // page -- what the "seen N of M" line needs once M can span several pages.
+  seenCount: number;
+}
 
 export interface MediaListItemView {
   item: MediaListItem;
@@ -37,10 +49,22 @@ export interface MediaListItemView {
 }
 
 export interface MediaListPreviewItem {
+  id: number;
   tmdbId: number;
   mediaType: MediaListItem['mediaType'];
+  // Null when TMDB no longer knows the title.
+  title: string | null;
   // Null when TMDB has no art, or no longer knows the title.
   posterPath: string | null;
+  year: number | null;
+  // The requesting member's own state, so the poster strip can offer the right CTA.
+  watched: boolean;
+  // Availability in the library, which is what decides between offering a request and
+  // reporting one already in flight.
+  status: MediaListItem['status'];
+  createdAt: Date;
+  addedBy: UserRef | null;
+  pinnedAt: Date | null;
 }
 
 export interface MediaListSummary {
@@ -49,11 +73,28 @@ export interface MediaListSummary {
   itemCount: number;
   seenCount: number;
   previewItems: MediaListPreviewItem[];
+  // Everyone the list is shared with, for the shelf row's avatar badges. Full set here;
+  // the presentation mapper decides how much of it is worth putting on the wire.
+  sharedWith: UserRef[];
+}
+
+export interface MediaListInviteView {
+  list: MediaList;
+  role: CollaboratorRole;
+  invitedBy: UserRef | null;
+  createdAt: Date;
+  // A count only, never the items themselves: the invite card lets someone decide
+  // whether to accept without first being shown the list's contents.
+  itemCount: number;
 }
 
 // Enough to fill the poster strip on a shelf row without turning the index into a long
 // run of TMDB lookups.
 const PREVIEW_ITEM_COUNT = 7;
+
+// Matches the page size Discover's own infinite-scroll lists use, for a consistent
+// scroll cadence across the app.
+const ITEMS_PAGE_SIZE = 20;
 
 // Assembles what the list and detail screens read. Kept apart from the services that
 // change things, because the rules for reading are only ever "who is allowed to look"
@@ -74,6 +115,13 @@ export class MediaListViewService {
   public async summariesFor(userId: number): Promise<MediaListSummary[]> {
     const lists = await this.lists.findAccessibleTo(userId);
 
+    // One query for every list's collaborators, keyed by list id, instead of one per
+    // list inside the map below — that would turn N lists into N more queries on top
+    // of the index's already-documented N+1.
+    const collaboratorsByList = await this.collaborators.findByLists(
+      lists.map((list) => list.id)
+    );
+
     return Promise.all(
       lists.map(async (list) => {
         const [items, membership] = await Promise.all([
@@ -86,14 +134,41 @@ export class MediaListViewService {
           allSeasonCounts: false,
         });
 
+        // findByList already returns pinned-first (most recently pinned first), then
+        // unpinned by highest position first -- the same "what's new on this list" order
+        // the preview wants, so this re-sort just makes that order explicit rather than
+        // relying on the repository's ordering going unchanged. Manual drag-reorder was
+        // never built (see WATCHLISTS_STATUS.md), so position is still exactly an
+        // insertion counter today -- a more reliable "most recent" signal than a
+        // timestamp column, which two adds in the same request could tie on.
+        const pinned = views
+          .filter((view) => view.item.pinnedAt !== null)
+          .sort(
+            (a, b) => b.item.pinnedAt!.getTime() - a.item.pinnedAt!.getTime()
+          );
+        const unpinned = views
+          .filter((view) => view.item.pinnedAt === null)
+          .sort((a, b) => b.item.position - a.item.position);
+        const byRecency = [...pinned, ...unpinned];
+
         return {
           list,
           membership,
           itemCount: items.length,
           seenCount: views.filter((view) => view.watched).length,
           previewItems: await this.buildPreview(
-            items.slice(0, PREVIEW_ITEM_COUNT)
+            byRecency.slice(0, PREVIEW_ITEM_COUNT)
           ),
+          // Owner first, then accepted collaborators -- same "everyone with access"
+          // shape sharedWithFor uses for the detail page, so a collaborator sees the
+          // owner here too. The viewer's own face (owner or collaborator) is filtered
+          // out client-side by WatchlistSharedWithAvatars, not here.
+          sharedWith: [
+            list.owner,
+            ...(collaboratorsByList.get(list.id) ?? []).map(
+              (collaborator) => collaborator.user
+            ),
+          ],
         };
       })
     );
@@ -102,26 +177,137 @@ export class MediaListViewService {
   public async itemViewsFor(
     listId: number,
     userId: number,
-    filter: MediaListItemFilter = 'all'
-  ): Promise<MediaListItemView[]> {
+    filter: MediaListItemFilter = 'all',
+    sortBy: MediaListItemSortBy = 'added',
+    page = 1,
+    pageSize = ITEMS_PAGE_SIZE
+  ): Promise<MediaListItemViewPage> {
     const list = await this.listService.requireList(listId);
     this.access.assertCan(
       await this.listService.membershipFor(list, userId),
       'viewList'
     );
 
-    const items = await this.items.findByList(listId);
+    // The unfiltered, added-date order is the only one the DB can page directly --
+    // filter matches on watched state, computed below from watch records, and a title
+    // sort depends on a TMDB-resolved summary, so neither exists as a column to filter
+    // or order by in SQL. Both cases fall back to resolving the whole list once and
+    // paging the in-memory result instead.
+    if (filter === 'all' && sortBy === 'added') {
+      const { items, total } = await this.items.findPageInList(listId, {
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+      const [results, seenCount] = await Promise.all([
+        this.buildViews(items, userId, {
+          withSummaries: true,
+          allSeasonCounts: true,
+        }),
+        this.seenCountFor(listId, userId),
+      ]);
+
+      return {
+        results,
+        page,
+        totalResults: total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        seenCount,
+      };
+    }
+
+    const { items } = await this.items.findPageInList(listId, {});
     const views = await this.buildViews(items, userId, {
       withSummaries: true,
       allSeasonCounts: true,
     });
+    const seenCount = views.filter((view) => view.watched).length;
 
-    return views.filter((view) => this.matchesFilter(view, filter));
+    let filtered = views.filter((view) => this.matchesFilter(view, filter));
+    if (sortBy === 'title') {
+      filtered = this.sortByTitle(filtered);
+    }
+
+    const start = (page - 1) * pageSize;
+    return {
+      results: filtered.slice(start, start + pageSize),
+      page,
+      totalResults: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+      seenCount,
+    };
   }
 
-  public async collaboratorsFor(listId: number): Promise<UserRef[]> {
-    const collaborators = await this.collaborators.findByList(listId);
-    return collaborators.map((collaborator) => collaborator.user);
+  // Watch state across the whole list, without resolving a TMDB summary for every
+  // item -- the same lightweight shape summariesFor already uses for its own
+  // seenCount, reused here since the fast path above only has the current page's items.
+  private async seenCountFor(listId: number, userId: number): Promise<number> {
+    const items = await this.items.findByList(listId);
+    const views = await this.buildViews(items, userId, {
+      withSummaries: false,
+      allSeasonCounts: false,
+    });
+    return views.filter((view) => view.watched).length;
+  }
+
+  // Pinned titles stay exactly where findPageInList put them -- most recently pinned
+  // first -- regardless of sortBy; only the unpinned remainder is re-ordered by title.
+  // Without this split, a title sort would silently undo a pin.
+  private sortByTitle(views: MediaListItemView[]): MediaListItemView[] {
+    const pinned = views.filter((view) => view.item.pinnedAt !== null);
+    const unpinned = [
+      ...views.filter((view) => view.item.pinnedAt === null),
+    ].sort((a, b) =>
+      (a.summary?.title ?? '').localeCompare(b.summary?.title ?? '')
+    );
+    return [...pinned, ...unpinned];
+  }
+
+  // Everyone whose watch state can show up on the list. The owner is deliberately not a
+  // collaborator row, so asking the collaborator table alone would drop the seen-by
+  // badge of the person who created the list.
+  public async membersFor(listId: number): Promise<UserRef[]> {
+    const [list, collaborators] = await Promise.all([
+      this.listService.requireList(listId),
+      this.collaborators.findByList(listId),
+    ]);
+
+    return [
+      list.owner,
+      ...collaborators.map((collaborator) => collaborator.user),
+    ];
+  }
+
+  // Everyone with access to a single list -- owner plus accepted collaborators, never a
+  // pending invitee who has not joined yet -- for the detail page's "who's here" avatar
+  // row. Unlike membersFor, this is accepted-only: the same rule the index's batched
+  // lookup applies, reused here via a one-element list rather than a second query path.
+  public async sharedWithFor(listId: number): Promise<UserRef[]> {
+    const [list, byList] = await Promise.all([
+      this.listService.requireList(listId),
+      this.collaborators.findByLists([listId]),
+    ]);
+
+    return [
+      list.owner,
+      ...(byList.get(listId) ?? []).map((collaborator) => collaborator.user),
+    ];
+  }
+
+  // Every pending invite for the signed-in user, with an item count per list so the
+  // Invites section can show something more than a bare name without touching the
+  // items themselves.
+  public async invitesFor(userId: number): Promise<MediaListInviteView[]> {
+    const invites = await this.collaborators.findPendingInvitesFor(userId);
+
+    return Promise.all(
+      invites.map(async (invite) => ({
+        list: invite.list,
+        role: invite.role,
+        invitedBy: invite.invitedBy,
+        createdAt: invite.createdAt,
+        itemCount: (await this.items.findByList(invite.list.id)).length,
+      }))
+    );
   }
 
   private matchesFilter(
@@ -232,16 +418,29 @@ export class MediaListViewService {
   }
 
   private async buildPreview(
-    items: MediaListItem[]
+    views: MediaListItemView[]
   ): Promise<MediaListPreviewItem[]> {
     return Promise.all(
-      items.map(async (item) => ({
-        tmdbId: item.tmdbId,
-        mediaType: item.mediaType,
-        posterPath:
-          (await this.summaries.getSummary(item.tmdbId, item.mediaType))
-            ?.posterPath ?? null,
-      }))
+      views.map(async (view) => {
+        const summary = await this.summaries.getSummary(
+          view.item.tmdbId,
+          view.item.mediaType
+        );
+
+        return {
+          id: view.item.id,
+          tmdbId: view.item.tmdbId,
+          mediaType: view.item.mediaType,
+          title: summary?.title ?? null,
+          watched: view.watched,
+          status: view.item.status,
+          posterPath: summary?.posterPath ?? null,
+          year: summary?.year ?? null,
+          createdAt: view.item.createdAt,
+          addedBy: view.item.addedBy,
+          pinnedAt: view.item.pinnedAt,
+        };
+      })
     );
   }
 

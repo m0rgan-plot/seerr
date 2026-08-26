@@ -25,11 +25,15 @@ export class MediaListItemRecord {
   @Index()
   public list: MediaListRecord;
 
+  // Media is shared with requests and issues and is deleted by routine admin actions
+  // such as blocklisting. Cascading from there would take the list entry with it, and
+  // with it every member's episode history, so the link is dropped instead.
   @ManyToOne(() => Media, {
-    onDelete: 'CASCADE',
+    onDelete: 'SET NULL',
+    nullable: true,
   })
   @Index()
-  public media: Media;
+  public media?: Media | null;
 
   @Column()
   @Index()
@@ -41,6 +45,11 @@ export class MediaListItemRecord {
   // Manual ordering within the list. Resequenced as a block by the reorder endpoint.
   @Column({ type: 'int', default: 0 })
   public position: number;
+
+  // Null unless pinned. Non-null sorts a title to the top of the list ahead of
+  // `position`, and its value is the tie-breaker between more than one pinned item.
+  @DbAwareColumn({ type: 'datetime', nullable: true })
+  public pinnedAt: Date | null;
 
   // Null once the adding user is deleted. The item itself stays in the list.
   @ManyToOne(() => User, {

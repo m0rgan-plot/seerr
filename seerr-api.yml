@@ -2173,12 +2173,51 @@ components:
         - $ref: '#/components/schemas/MediaListItemRef'
         - type: object
           properties:
+            id:
+              type: number
+              example: 12
+            title:
+              type: string
+              nullable: true
+              example: 'Dune: Part Two'
             posterPath:
               type: string
               nullable: true
               example: '/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg'
+            year:
+              type: number
+              nullable: true
+              example: 2024
+            watched:
+              type: boolean
+              example: false
+            status:
+              type: number
+              nullable: true
+              example: 5
+            createdAt:
+              type: string
+              example: '2026-08-15T03:00:00.000Z'
+            addedBy:
+              description: Null once the person who added the title is deleted.
+              $ref: '#/components/schemas/MediaListUser'
+            pinnedAt:
+              description: >-
+                When the title was pinned. Null when it isn't. Pinned titles lead the
+                strip ahead of anything unpinned, most recently pinned first.
+              type: string
+              nullable: true
+              example: null
           required:
+            - id
+            - title
             - posterPath
+            - year
+            - watched
+            - status
+            - createdAt
+            - addedBy
+            - pinnedAt
     MediaListSeasonProgress:
       type: object
       properties:
@@ -2244,6 +2283,17 @@ components:
         updatedAt:
           type: string
           example: '2026-08-15T03:00:00.000Z'
+        sharedWith:
+          type: array
+          description: >-
+            Who the list is shared with, for the shared-with avatar badges (shelf row
+            and detail header alike). Capped to a handful of entries server-side; see
+            sharedWithCount for the true total.
+          items:
+            $ref: '#/components/schemas/MediaListUser'
+        sharedWithCount:
+          type: number
+          example: 2
       required:
         - id
         - name
@@ -2252,6 +2302,8 @@ components:
         - role
         - createdAt
         - updatedAt
+        - sharedWith
+        - sharedWithCount
     MediaListSummary:
       allOf:
         - $ref: '#/components/schemas/MediaList'
@@ -2301,10 +2353,32 @@ components:
         position:
           type: number
           example: 0
+        status:
+          description: >-
+            Availability in the library. Null when nothing in the app has ever
+            tracked the title.
+          type: number
+          nullable: true
+          example: 5
         addedBy:
+          # The validator rejects "nullable" beside a $ref, so the null case is stated
+          # here rather than declared. Responses do send null.
           description: Null once the person who added the title is deleted.
           $ref: '#/components/schemas/MediaListUser'
+        pinnedAt:
+          description: >-
+            When the title was pinned. Null when it isn't. Non-null sorts it to the top
+            of the list ahead of position, most recently pinned first.
+          type: string
+          nullable: true
+          example: null
         createdAt:
+          type: string
+          example: '2026-08-15T03:00:00.000Z'
+        updatedAt:
+          description: >-
+            Bumped by adding the item or reordering the list, not by any member's
+            watched state.
           type: string
           example: '2026-08-15T03:00:00.000Z'
         watched:
@@ -2326,8 +2400,11 @@ components:
         - posterPath
         - year
         - position
+        - status
         - addedBy
+        - pinnedAt
         - createdAt
+        - updatedAt
         - watched
         - progress
         - seenBy
@@ -2363,6 +2440,10 @@ components:
         role:
           type: string
           enum: [write, read]
+        status:
+          description: Pending until the invited user accepts. Rejecting deletes the row instead of storing a rejected status.
+          type: string
+          enum: [pending, accepted]
         invitedBy:
           description: Null once the person who sent the invitation is deleted.
           $ref: '#/components/schemas/MediaListUser'
@@ -2372,7 +2453,34 @@ components:
       required:
         - user
         - role
+        - status
         - invitedBy
+        - createdAt
+    MediaListInvite:
+      description: A pending invite as seen by the invited user. Carries an item count but never the items themselves.
+      type: object
+      properties:
+        listId:
+          type: number
+        listName:
+          type: string
+        role:
+          type: string
+          enum: [write, read]
+        invitedBy:
+          description: Null once the person who sent the invitation is deleted.
+          $ref: '#/components/schemas/MediaListUser'
+        itemCount:
+          type: number
+        createdAt:
+          type: string
+          example: '2026-08-16T03:00:00.000Z'
+      required:
+        - listId
+        - listName
+        - role
+        - invitedBy
+        - itemCount
         - createdAt
   securitySchemes:
     cookieAuth:
@@ -8426,6 +8534,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MediaList'
+  /mediaLists/invites:
+    get:
+      summary: Get the current user's pending watchlist invites
+      description: Lists never appear here once accepted or rejected.
+      tags:
+        - medialists
+      responses:
+        '200':
+          description: Pending invites returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaListInvite'
+  /mediaLists/membership:
+    get:
+      summary: Which of the current user's watchlists already hold a title
+      description: >-
+        Scoped to lists the user owns or is shared with. Used by the media page's Add to
+        Watchlist button to show a list as already added without requiring a click first.
+      tags:
+        - medialists
+      parameters:
+        - in: query
+          name: tmdbId
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum:
+              - movie
+              - tv
+      responses:
+        '200':
+          description: Lists that already contain this title, with the item id on each
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        listId:
+                          type: integer
+                        itemId:
+                          type: integer
   /mediaLists/{mediaListId}:
     get:
       summary: Get a single watchlist
@@ -8504,15 +8666,37 @@ paths:
             type: string
             enum: [all, unseen, inprogress, seen]
             default: all
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [added, title]
+            default: added
+        - in: query
+          name: page
+          schema:
+            type: number
+            default: 1
       responses:
         '200':
           description: Titles returned
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MediaListItem'
+                type: object
+                properties:
+                  page:
+                    type: number
+                  totalPages:
+                    type: number
+                  totalResults:
+                    type: number
+                  seenCount:
+                    type: number
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MediaListItem'
     post:
       summary: Add a title to a watchlist
       tags:
@@ -8583,6 +8767,46 @@ paths:
       responses:
         '204':
           description: Title removed
+  /mediaLists/{mediaListId}/items/{itemId}/pinned:
+    post:
+      summary: Pin a title to the top of a watchlist
+      description: >-
+        Requires write access to the list, the same as adding or removing a title.
+        Pinning again refreshes the pin so it stays ahead of one pinned earlier.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Title pinned
+    delete:
+      summary: Unpin a title
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Title unpinned
   /mediaLists/{mediaListId}/items/{itemId}/watched:
     post:
       summary: Mark a movie as seen by the current user
@@ -8855,6 +9079,40 @@ paths:
       responses:
         '204':
           description: Access removed
+  /mediaLists/{mediaListId}/invite/accept:
+    post:
+      summary: Accept a pending watchlist invite
+      description: Reserved to the invited user, and only while the invite is still pending.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListCollaborator'
+  /mediaLists/{mediaListId}/invite/reject:
+    post:
+      summary: Reject a pending watchlist invite
+      description: Final. Deletes the invite outright; the owner must invite the user again to offer access.
+      tags:
+        - medialists
+      parameters:
+        - in: path
+          name: mediaListId
+          required: true
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Invite rejected
 security:
   - cookieAuth: []
   - apiKey: []

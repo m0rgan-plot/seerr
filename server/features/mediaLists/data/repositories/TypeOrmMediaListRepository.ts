@@ -9,6 +9,7 @@ import type {
   MediaListRepository,
   UpdateMediaListInput,
 } from '@server/features/mediaLists/domain/repositories/MediaListRepository';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 
 export class TypeOrmMediaListRepository implements MediaListRepository {
   public async findById(id: number): Promise<MediaList | null> {
@@ -27,8 +28,8 @@ export class TypeOrmMediaListRepository implements MediaListRepository {
       .leftJoin(
         MediaListCollaboratorRecord,
         'collaborator',
-        'collaborator.listId = list.id AND collaborator.userId = :userId',
-        { userId }
+        'collaborator.listId = list.id AND collaborator.userId = :userId AND collaborator.status = :status',
+        { userId, status: InviteStatus.ACCEPTED }
       )
       .where('owner.id = :userId', { userId })
       .orWhere('collaborator.id IS NOT NULL')
@@ -77,5 +78,9 @@ export class TypeOrmMediaListRepository implements MediaListRepository {
   public async delete(id: number): Promise<void> {
     // Soft delete: stamps deletedAt rather than removing the row, per MediaListRecord.
     await getRepository(MediaListRecord).softDelete(id);
+  }
+
+  public async touch(id: number): Promise<void> {
+    await getRepository(MediaListRecord).update(id, { updatedAt: new Date() });
   }
 }

@@ -55,6 +55,12 @@ const messages = defineMessages('components.NotificationTypeSelector', {
     'Get notified when issues you reported are resolved.',
   adminissueresolvedDescription:
     'Get notified when issues are resolved by other users.',
+  medialistshared: 'Watchlist Shared',
+  medialistsharedDescription:
+    'Send notifications when someone shares a watchlist with you.',
+  medialistitemadded: 'Watchlist Updated',
+  medialistitemaddedDescription:
+    'Send notifications when someone adds a title to a watchlist you are on.',
   issuereopened: 'Issue Reopened',
   issuereopenedDescription: 'Send notifications when issues are reopened.',
   userissuereopenedDescription:
@@ -106,6 +112,9 @@ export enum Notification {
   ISSUE_RESOLVED = 1024,
   ISSUE_REOPENED = 2048,
   MEDIA_AUTO_REQUESTED = 4096,
+  // Kept in step with the server enum in server/lib/notifications.
+  MEDIA_LIST_SHARED = 8192,
+  MEDIA_LIST_ITEM_ADDED = 16384,
 }
 
 export const ALL_NOTIFICATIONS = Object.values(Notification)
@@ -354,6 +363,22 @@ const NotificationTypeSelector = ({
           }),
         hasNotifyUser:
           !user || hasPermission(Permission.MANAGE_ISSUES) ? false : true,
+      },
+      {
+        // Watchlist notifications always address one person, so there is no admin
+        // variant and nothing to gate on a permission.
+        id: 'media-list-shared',
+        name: intl.formatMessage(messages.medialistshared),
+        description: intl.formatMessage(messages.medialistsharedDescription),
+        value: Notification.MEDIA_LIST_SHARED,
+        hasNotifyUser: false,
+      },
+      {
+        id: 'media-list-item-added',
+        name: intl.formatMessage(messages.medialistitemadded),
+        description: intl.formatMessage(messages.medialistitemaddedDescription),
+        value: Notification.MEDIA_LIST_ITEM_ADDED,
+        hasNotifyUser: false,
       },
     ];
 

@@ -113,3 +113,74 @@ describe('watchlists frontend architecture', () => {
     assert.deepStrictEqual(offenders.map(asRelative), []);
   });
 });
+
+// The frontend keeps its own copy of the Notification enum, so a value present on one
+// side and missing on the other cannot be enabled by anyone.
+describe('notification enum parity', () => {
+  const valuesIn = (source: string) => {
+    const body = source.slice(
+      source.indexOf('enum Notification {') + 'enum Notification {'.length
+    );
+    const entries = body.slice(0, body.indexOf('}'));
+
+    return Object.fromEntries(
+      [...entries.matchAll(/(\w+)\s*=\s*(\d+)/g)].map((match) => [
+        match[1],
+        Number(match[2]),
+      ])
+    );
+  };
+
+  it('matches between the server and the frontend', () => {
+    const root = join(__dirname, '../../..');
+    const server = valuesIn(
+      readFileSync(join(root, 'server/lib/notifications/index.ts'), 'utf8')
+    );
+    const client = valuesIn(
+      readFileSync(
+        join(root, 'src/components/NotificationTypeSelector/index.tsx'),
+        'utf8'
+      )
+    );
+
+    assert.deepStrictEqual(client, server);
+  });
+
+  // Parity is not delivery. Both enums agreed while email and web push still could not
+  // render the watchlist types: email decides what to send from payload.request and
+  // payload.issue and returns nothing without them, and web push falls through to a
+  // notification titled "Unknown". Watchlist payloads carry neither, so every type this
+  // feature sends has to be named in those two agents.
+  it('covers every watchlist type in the agents that branch on the type', () => {
+    const root = join(__dirname, '../../..');
+    const gateway = readFileSync(
+      join(
+        root,
+        'server/features/mediaLists/data/providers/NotificationGatewayImpl.ts'
+      ),
+      'utf8'
+    );
+
+    const sent = [
+      ...new Set(
+        [...gateway.matchAll(/Notification\.(\w+)/g)].map((match) => match[1])
+      ),
+    ];
+
+    assert.ok(sent.length > 0, 'expected the gateway to send notifications');
+
+    const branching = [
+      'server/lib/notifications/agents/email.ts',
+      'server/lib/notifications/agents/webpush.ts',
+    ];
+
+    const missing = branching.flatMap((file) => {
+      const source = readFileSync(join(root, file), 'utf8');
+      return sent
+        .filter((type) => !source.includes(`Notification.${type}`))
+        .map((type) => `${file}: ${type}`);
+    });
+
+    assert.deepStrictEqual(missing, []);
+  });
+});

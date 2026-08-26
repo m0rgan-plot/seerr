@@ -41,6 +41,18 @@ describe('TmdbTvMetadataProvider', () => {
     assert.strictEqual(received, 125988);
   });
 
+  // A title TMDB refuses to resolve must not be able to take a list down, because these
+  // counts are read on every list the title sits on.
+  it('reports no seasons when tmdb cannot resolve the show', async () => {
+    const provider = providerFor({
+      getTvShow: (async () => {
+        throw new Error('[TMDB] Failed to fetch TV show details: 404');
+      }) as unknown as TheMovieDb['getTvShow'],
+    });
+
+    assert.deepStrictEqual(await provider.getSeasonEpisodeCounts(999999), []);
+  });
+
   it('maps a season to its episode numbers', async () => {
     const provider = providerFor({
       getTvSeason: (async () => ({

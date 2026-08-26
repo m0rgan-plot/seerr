@@ -8,6 +8,7 @@ import { TypeOrmMediaListItemRepository } from '@server/features/mediaLists/data
 import { TypeOrmMediaListRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListRepository';
 import { TypeOrmMediaListWatchRepository } from '@server/features/mediaLists/data/repositories/TypeOrmMediaListWatchRepository';
 import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
+import { InviteStatus } from '@server/features/mediaLists/domain/valueObjects/InviteStatus';
 import { setupTestDb } from '@server/test/db';
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
@@ -80,6 +81,7 @@ describe('media list repositories', () => {
         role: CollaboratorRole.READ,
         invitedById: owner.id,
       });
+      await collaborators.accept(list.id, friend.id);
 
       const forFriend = await lists.findAccessibleTo(friend.id);
       const forOwner = await lists.findAccessibleTo(owner.id);
@@ -94,6 +96,22 @@ describe('media list repositories', () => {
         [list.id]
       );
       assert.ok(friendsOwn.id);
+    });
+
+    // A share is not access until it is accepted, so it must not show up as "shared
+    // with me" while still pending.
+    it('excludes a list from a pending, unaccepted invite', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const forFriend = await lists.findAccessibleTo(friend.id);
+
+      assert.deepStrictEqual(forFriend, []);
     });
 
     it('does not return a list twice when the user owns it', async () => {
@@ -206,6 +224,27 @@ describe('media list repositories', () => {
       assert.ok(media);
     });
 
+    // Blocklisting a title deletes its media row. Cascading from there would take the
+    // list entry with it, and with it what every member had recorded as watched.
+    it('keeps the item and the watch history when the media row is deleted', async () => {
+      const { list, owner, friend } = await seedList();
+      const item = await items.add({
+        listId: list.id,
+        tmdbId: 4242,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      await watches.setMovieWatched(item.id, friend.id);
+
+      await getRepository(Media).delete({ tmdbId: 4242 });
+
+      assert.ok(await items.findById(item.id));
+      assert.strictEqual(
+        await watches.isMovieWatched(item.id, friend.id),
+        true
+      );
+    });
+
     it('finds an item by title within a list', async () => {
       const { list, owner } = await seedList();
       await items.add({
@@ -253,7 +292,97 @@ describe('media list repositories', () => {
       );
       assert.deepStrictEqual(
         ordered.map((item) => item.position),
-        [0, 1, 2]
+        [2, 1, 0]
+      );
+    });
+
+    it('pins an item to the top ahead of position, most recently pinned first', async () => {
+      const { list, owner } = await seedList();
+      await items.add({
+        listId: list.id,
+        tmdbId: 1,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const second = await items.add({
+        listId: list.id,
+        tmdbId: 2,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const third = await items.add({
+        listId: list.id,
+        tmdbId: 3,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+
+      // second first, so third pinning last means third leads. The pause guarantees
+      // distinct pinnedAt timestamps to sort by.
+      await items.pin(second.id);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await items.pin(third.id);
+
+      const ordered = await items.findByList(list.id);
+      assert.deepStrictEqual(
+        ordered.map((item) => item.tmdbId),
+        [3, 2, 1]
+      );
+      assert.ok(ordered[0].pinnedAt);
+      assert.ok(ordered[1].pinnedAt);
+      assert.strictEqual(ordered[2].pinnedAt, null);
+
+      await items.unpin(second.id);
+      const afterUnpin = await items.findByList(list.id);
+      assert.deepStrictEqual(
+        afterUnpin.map((item) => item.tmdbId),
+        [3, 2, 1]
+      );
+      assert.strictEqual(afterUnpin[1].pinnedAt, null);
+    });
+
+    it('pages the pinned-first, most-recently-added order', async () => {
+      const { list, owner } = await seedList();
+      await items.add({
+        listId: list.id,
+        tmdbId: 1,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      await items.add({
+        listId: list.id,
+        tmdbId: 2,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const third = await items.add({
+        listId: list.id,
+        tmdbId: 3,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+
+      // Pinning the newest item should still put it first, ahead of earlier adds.
+      await items.pin(third.id);
+
+      const firstPage = await items.findPageInList(list.id, {
+        skip: 0,
+        take: 2,
+      });
+      const secondPage = await items.findPageInList(list.id, {
+        skip: 2,
+        take: 2,
+      });
+
+      assert.strictEqual(firstPage.total, 3);
+      assert.deepStrictEqual(
+        firstPage.items.map((item) => item.tmdbId),
+        [3, 2]
+      );
+      assert.strictEqual(secondPage.total, 3);
+      assert.deepStrictEqual(
+        secondPage.items.map((item) => item.tmdbId),
+        [1]
       );
     });
 
@@ -295,6 +424,73 @@ describe('media list repositories', () => {
       await items.remove(item.id);
 
       assert.strictEqual(await items.findById(item.id), null);
+    });
+
+    it('finds which of a candidate set of lists already hold a title', async () => {
+      const { list, owner } = await seedList();
+      const other = await lists.create({
+        name: 'Other',
+        description: null,
+        ownerId: owner.id,
+      });
+      const untouched = await lists.create({
+        name: 'Untouched',
+        description: null,
+        ownerId: owner.id,
+      });
+      const mine = await items.add({
+        listId: list.id,
+        tmdbId: 42,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      const theirs = await items.add({
+        listId: other.id,
+        tmdbId: 42,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+      // A series with the same tmdb id is a different title and must not match.
+      await items.add({
+        listId: untouched.id,
+        tmdbId: 42,
+        mediaType: MediaType.TV,
+        addedById: owner.id,
+      });
+
+      const found = await items.findItemsContaining(
+        [list.id, other.id, untouched.id],
+        42,
+        MediaType.MOVIE
+      );
+
+      assert.deepStrictEqual(
+        new Set(found.map((match) => `${match.listId}:${match.itemId}`)),
+        new Set([`${list.id}:${mine.id}`, `${other.id}:${theirs.id}`])
+      );
+    });
+
+    it('ignores lists outside the candidate set', async () => {
+      const { list, owner } = await seedList();
+      const outOfScope = await lists.create({
+        name: 'Not asked about',
+        description: null,
+        ownerId: owner.id,
+      });
+      await items.add({
+        listId: outOfScope.id,
+        tmdbId: 7,
+        mediaType: MediaType.MOVIE,
+        addedById: owner.id,
+      });
+
+      const found = await items.findItemsContaining(
+        [list.id],
+        7,
+        MediaType.MOVIE
+      );
+
+      assert.deepStrictEqual(found, []);
     });
   });
 
@@ -514,6 +710,48 @@ describe('media list repositories', () => {
       assert.strictEqual(all[0].invitedBy?.id, owner.id);
     });
 
+    it('batches collaborators across lists, keyed by list id, in one query', async () => {
+      const { list: first, owner, friend } = await seedList();
+      const second = await lists.create({
+        name: 'Second list',
+        description: null,
+        ownerId: owner.id,
+      });
+      await collaborators.add({
+        listId: first.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+      // findByLists feeds the "shared with" avatars, which only make sense once
+      // someone has actually joined the list.
+      await collaborators.accept(first.id, friend.id);
+
+      const byList = await collaborators.findByLists([first.id, second.id]);
+
+      assert.strictEqual(byList.get(first.id)?.length, 1);
+      assert.strictEqual(byList.get(first.id)?.[0].user.id, friend.id);
+      assert.strictEqual(byList.has(second.id), false);
+    });
+
+    it('excludes a pending invite from the batched shared-with lookup', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const byList = await collaborators.findByLists([list.id]);
+
+      assert.strictEqual(byList.has(list.id), false);
+    });
+
+    it('returns an empty map for an empty batch', async () => {
+      assert.deepStrictEqual(await collaborators.findByLists([]), new Map());
+    });
+
     it('removes a collaborator', async () => {
       const { list, owner, friend } = await seedList();
       await collaborators.add({
@@ -530,6 +768,84 @@ describe('media list repositories', () => {
         null
       );
       assert.deepStrictEqual(await collaborators.findByList(list.id), []);
+    });
+
+    it('withholds the role from findAcceptedRole until accepted', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.WRITE,
+        invitedById: owner.id,
+      });
+
+      assert.strictEqual(
+        await collaborators.findAcceptedRole(list.id, friend.id),
+        null
+      );
+      // findRole (any status) still sees the pending row, since collaborator
+      // management needs to see it even before it grants access.
+      assert.strictEqual(
+        await collaborators.findRole(list.id, friend.id),
+        CollaboratorRole.WRITE
+      );
+
+      await collaborators.accept(list.id, friend.id);
+
+      assert.strictEqual(
+        await collaborators.findAcceptedRole(list.id, friend.id),
+        CollaboratorRole.WRITE
+      );
+    });
+
+    it('finds and clears a pending invite', async () => {
+      const { list, owner, friend } = await seedList();
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+
+      const invite = await collaborators.findPendingInvite(list.id, friend.id);
+      assert.strictEqual(invite?.status, InviteStatus.PENDING);
+
+      await collaborators.accept(list.id, friend.id);
+
+      assert.strictEqual(
+        await collaborators.findPendingInvite(list.id, friend.id),
+        null
+      );
+    });
+
+    it('collects pending invites for a user across lists', async () => {
+      const { list, owner, friend } = await seedList();
+      const secondList = await lists.create({
+        name: 'Second list',
+        description: null,
+        ownerId: owner.id,
+      });
+      await collaborators.add({
+        listId: list.id,
+        userId: friend.id,
+        role: CollaboratorRole.READ,
+        invitedById: owner.id,
+      });
+      await collaborators.add({
+        listId: secondList.id,
+        userId: friend.id,
+        role: CollaboratorRole.WRITE,
+        invitedById: owner.id,
+      });
+      // Accepted, so it must not come back as a pending invite.
+      await collaborators.accept(secondList.id, friend.id);
+
+      const invites = await collaborators.findPendingInvitesFor(friend.id);
+
+      assert.strictEqual(invites.length, 1);
+      assert.strictEqual(invites[0].list.id, list.id);
+      assert.strictEqual(invites[0].role, CollaboratorRole.READ);
+      assert.strictEqual(invites[0].invitedBy?.id, owner.id);
     });
   });
 });

@@ -18,4 +18,7 @@ export interface MediaListRepository {
   create(input: CreateMediaListInput): Promise<MediaList>;
   update(id: number, changes: UpdateMediaListInput): Promise<MediaList>;
   delete(id: number): Promise<void>;
+  // Bumps updatedAt alone, for actions (adding/removing items) that change what the
+  // list holds without going through update()'s name/description fields.
+  touch(id: number): Promise<void>;
 }

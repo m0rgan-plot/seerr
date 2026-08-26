@@ -8,6 +8,7 @@ import {
   STRANGER,
   WRITER,
 } from '@server/features/mediaLists/domain/test/harness';
+import { CollaboratorRole } from '@server/features/mediaLists/domain/valueObjects/CollaboratorRole';
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
@@ -65,25 +66,74 @@ describe('MediaListViewService', () => {
       assert.strictEqual(forOwner.seenCount, 0);
     });
 
-    it('resolves a poster for each preview title', async () => {
+    // The preview reads as "what's new", so the most recently added title leads.
+    it('resolves a poster for each preview title, newest first', async () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [11, 12]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
 
       const [summary] = await harness.viewService.summariesFor(OWNER.id);
 
-      assert.deepStrictEqual(summary.previewItems, [
-        {
-          tmdbId: 11,
-          mediaType: MediaType.MOVIE,
-          posterPath: '/poster-11.jpg',
-        },
-        {
-          tmdbId: 12,
-          mediaType: MediaType.MOVIE,
-          posterPath: '/poster-12.jpg',
-        },
-      ]);
+      for (const item of summary.previewItems) {
+        assert.ok(item.createdAt instanceof Date);
+      }
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => ({
+          id: item.id,
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+          title: item.title,
+          posterPath: item.posterPath,
+          watched: item.watched,
+          status: item.status,
+          addedBy: item.addedBy,
+        })),
+        [
+          {
+            id: items[0].id,
+            tmdbId: 12,
+            mediaType: MediaType.MOVIE,
+            title: 'Title 12',
+            posterPath: '/poster-12.jpg',
+            watched: false,
+            status: null,
+            addedBy: OWNER,
+          },
+          {
+            id: items[1].id,
+            tmdbId: 11,
+            mediaType: MediaType.MOVIE,
+            title: 'Title 11',
+            posterPath: '/poster-11.jpg',
+            watched: false,
+            status: null,
+            addedBy: OWNER,
+          },
+        ]
+      );
+    });
+
+    it('reports the caller watched state on each preview title', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [21, 22]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      // items are most-recently-added first, so items[1] is the first added -- the one
+      // the preview places last.
+      await harness.watchService.setMovieWatched(
+        list.id,
+        items[1].id,
+        OWNER.id,
+        true
+      );
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => item.watched),
+        [false, true]
+      );
     });
 
     // Artwork is decoration: a title with no art leaves a gap rather than failing the page.
@@ -98,7 +148,8 @@ describe('MediaListViewService', () => {
     });
 
     // The strip only holds so many, and every extra preview is another TMDB lookup.
-    it('caps the preview at seven titles', async () => {
+    // It keeps the most recently added of the nine, not the first seven in.
+    it('caps the preview at the seven most recently added titles', async () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -109,7 +160,26 @@ describe('MediaListViewService', () => {
       assert.strictEqual(summary.previewItems.length, 7);
       assert.deepStrictEqual(
         summary.previewItems.map((item) => item.tmdbId),
-        [1, 2, 3, 4, 5, 6, 7]
+        [9, 8, 7, 6, 5, 4, 3]
+      );
+    });
+
+    // Pinning is "show me this before anything else", so it overrides recency in the
+    // strip the same way it does on the detail page.
+    it('puts a pinned title ahead of more recently added ones in the preview', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3]);
+      // items are most-recently-added first, so items[2] is the oldest -- tmdbId 1.
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+
+      await harness.itemService.setPinned(list.id, items[2].id, OWNER.id, true);
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.deepStrictEqual(
+        summary.previewItems.map((item) => item.tmdbId),
+        [1, 3, 2]
       );
     });
 
@@ -149,6 +219,100 @@ describe('MediaListViewService', () => {
         []
       );
     });
+
+    it('reports who each list is shared with, owner included', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      const [summary] = await harness.viewService.summariesFor(OWNER.id);
+
+      // A collaborator viewing their own row needs the owner too, not just their
+      // fellow collaborators -- the frontend filters out the viewer's own face, not
+      // this layer, so the owner appears here even in the owner's own summary.
+      assert.deepStrictEqual(
+        summary.sharedWith.map((collaborator) => collaborator.id).sort(),
+        [OWNER.id, WRITER.id, READER.id].sort()
+      );
+    });
+
+    // The index summary is documented as N+1-prone (server/features/mediaLists/domain
+    // read path). Collaborators must be fetched once for every visible list, not once
+    // per list, or this feature would deepen that problem.
+    it('fetches collaborators for every visible list in a single batched call', async () => {
+      const harness = buildHarness();
+      const first = await harness.seedSharedList();
+      const second = await harness.listService.create({
+        name: 'Second list',
+        description: null,
+        ownerId: OWNER.id,
+      });
+      harness.collaborators.findByListsCalls.length = 0;
+
+      const summaries = await harness.viewService.summariesFor(OWNER.id);
+
+      assert.strictEqual(summaries.length, 2);
+      assert.strictEqual(harness.collaborators.findByListsCalls.length, 1);
+      assert.deepStrictEqual(
+        harness.collaborators.findByListsCalls[0].sort(),
+        [first.id, second.id].sort()
+      );
+    });
+  });
+
+  describe('invites', () => {
+    it('lists a pending invite with an item count but resolves no summaries for it', async () => {
+      const harness = buildHarness();
+      const list = await harness.listService.create({
+        name: 'Film club',
+        ownerId: OWNER.id,
+      });
+      await addMovies(harness, list.id, [1, 2]);
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: STRANGER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+
+      const invites = await harness.viewService.invitesFor(STRANGER.id);
+
+      assert.strictEqual(invites.length, 1);
+      assert.strictEqual(invites[0].list.id, list.id);
+      assert.strictEqual(invites[0].itemCount, 2);
+      assert.strictEqual(invites[0].role, CollaboratorRole.READ);
+      assert.strictEqual(invites[0].invitedBy?.id, OWNER.id);
+    });
+
+    it('drops an invite once it is accepted', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await harness.collaboratorService.share({
+        listId: list.id,
+        recipientId: STRANGER.id,
+        role: CollaboratorRole.READ,
+        actor: OWNER,
+      });
+
+      await harness.collaboratorService.acceptInvite({
+        listId: list.id,
+        userId: STRANGER.id,
+      });
+
+      assert.deepStrictEqual(
+        await harness.viewService.invitesFor(STRANGER.id),
+        []
+      );
+    });
+
+    it('returns nothing for someone with no invites', async () => {
+      const harness = buildHarness();
+      await harness.seedSharedList();
+
+      assert.deepStrictEqual(
+        await harness.viewService.invitesFor(STRANGER.id),
+        []
+      );
+    });
   });
 
   describe('what each screen resolves', () => {
@@ -172,11 +336,14 @@ describe('MediaListViewService', () => {
       await addMovies(harness, list.id, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
       harness.summaryCalls.length = 0;
 
-      const views = await harness.viewService.itemViewsFor(list.id, OWNER.id);
+      const { results } = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id
+      );
 
-      assert.strictEqual(views.length, 9);
+      assert.strictEqual(results.length, 9);
       assert.strictEqual(harness.summaryCalls.length, 9);
-      assert.strictEqual(views[0].summary?.title, 'Title 1');
+      assert.strictEqual(results[0].summary?.title, 'Title 9');
     });
 
     // A ring reading 0/0 is worse than the extra cached lookup, so the detail page asks
@@ -192,10 +359,9 @@ describe('MediaListViewService', () => {
         actor: OWNER,
       });
 
-      const [onDetail] = await harness.viewService.itemViewsFor(
-        list.id,
-        OWNER.id
-      );
+      const {
+        results: [onDetail],
+      } = await harness.viewService.itemViewsFor(list.id, OWNER.id);
 
       assert.strictEqual(onDetail.progress?.watchedEpisodes, 0);
       assert.strictEqual(onDetail.progress?.totalEpisodes, 20);
@@ -225,10 +391,9 @@ describe('MediaListViewService', () => {
         true
       );
 
-      const [forOwner] = await harness.viewService.itemViewsFor(
-        list.id,
-        OWNER.id
-      );
+      const {
+        results: [forOwner],
+      } = await harness.viewService.itemViewsFor(list.id, OWNER.id);
 
       assert.strictEqual(forOwner.watched, false);
       assert.deepStrictEqual(forOwner.seenByUserIds, [WRITER.id]);
@@ -239,10 +404,11 @@ describe('MediaListViewService', () => {
       const harness = buildHarness();
       const list = await harness.seedSharedList();
       await addMovies(harness, list.id, [1, 2]);
+      // items are most-recently-added first, so items[0] is tmdbId 2.
       const items = await harness.itemService.itemsOf(list.id, OWNER.id);
       await harness.watchService.setMovieWatched(
         list.id,
-        items[1].id,
+        items[0].id,
         OWNER.id,
         true
       );
@@ -259,13 +425,111 @@ describe('MediaListViewService', () => {
       );
 
       assert.deepStrictEqual(
-        seen.map((view) => view.item.tmdbId),
+        seen.results.map((view) => view.item.tmdbId),
         [2]
       );
       assert.deepStrictEqual(
-        unseen.map((view) => view.item.tmdbId),
+        unseen.results.map((view) => view.item.tmdbId),
         [1]
       );
+    });
+
+    it('pages the default added-date order, pinned leading, unpinned most-recently-added first', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3, 4, 5]);
+      // items are most-recently-added first, so items[0] is tmdbId 5.
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      // Pinning the most recent add should still put it first, same as an unpinned one.
+      await harness.itemService.setPinned(list.id, items[0].id, OWNER.id, true);
+
+      const firstPage = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id,
+        'all',
+        'added',
+        1,
+        2
+      );
+      const secondPage = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id,
+        'all',
+        'added',
+        2,
+        2
+      );
+
+      assert.strictEqual(firstPage.totalResults, 5);
+      assert.strictEqual(firstPage.totalPages, 3);
+      assert.deepStrictEqual(
+        firstPage.results.map((view) => view.item.tmdbId),
+        [5, 4]
+      );
+      assert.deepStrictEqual(
+        secondPage.results.map((view) => view.item.tmdbId),
+        [3, 2]
+      );
+    });
+
+    it('sorts by title with pinned items still leading, and pages the result', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      // Title N is "Title {tmdbId}" -- 10 sorts before 2 lexicographically, unlike
+      // insertion or numeric order, so this only passes if the sort really runs.
+      await addMovies(harness, list.id, [2, 10, 1]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.itemService.setPinned(list.id, items[1].id, OWNER.id, true);
+
+      const page = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id,
+        'all',
+        'title',
+        1,
+        10
+      );
+
+      // tmdbId 10 is pinned, so it leads regardless of its title; the unpinned
+      // remainder (1, 2) follows in title order: "Title 1" before "Title 2".
+      assert.deepStrictEqual(
+        page.results.map((view) => view.item.tmdbId),
+        [10, 1, 2]
+      );
+    });
+
+    it('filters by watch state before paginating, not after', async () => {
+      const harness = buildHarness();
+      const list = await harness.seedSharedList();
+      await addMovies(harness, list.id, [1, 2, 3, 4]);
+      const items = await harness.itemService.itemsOf(list.id, OWNER.id);
+      await harness.watchService.setMovieWatched(
+        list.id,
+        items[0].id,
+        OWNER.id,
+        true
+      );
+      await harness.watchService.setMovieWatched(
+        list.id,
+        items[2].id,
+        OWNER.id,
+        true
+      );
+
+      // A page size smaller than the full list: if filtering ran after paging instead
+      // of before, this would come back short or empty even though two seen items exist.
+      const seen = await harness.viewService.itemViewsFor(
+        list.id,
+        OWNER.id,
+        'seen',
+        'added',
+        1,
+        1
+      );
+
+      assert.strictEqual(seen.totalResults, 2);
+      assert.strictEqual(seen.totalPages, 2);
+      assert.strictEqual(seen.results.length, 1);
     });
   });
 });

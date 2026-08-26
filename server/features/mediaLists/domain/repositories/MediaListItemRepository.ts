@@ -8,9 +8,30 @@ export interface AddMediaListItemInput {
   addedById: number;
 }
 
+export interface FindPageInListOptions {
+  // Omitted together to fetch every item in the list, still pinned-first/newest-first --
+  // itemViewsFor needs the full set when it has to filter by computed watch state or
+  // sort by title (TMDB-resolved, not a DB column) before paginating in memory.
+  skip?: number;
+  take?: number;
+}
+
+export interface MediaListItemPage {
+  items: MediaListItem[];
+  total: number;
+}
+
 export interface MediaListItemRepository {
   findById(itemId: number): Promise<MediaListItem | null>;
   findByList(listId: number): Promise<MediaListItem[]>;
+  // Same order as findByList (pinned first, most recently pinned first, then the
+  // unpinned tail most-recently-added first), with an optional skip/take window -- the
+  // one order a SQL query can express here, since title sorting depends on a
+  // TMDB-resolved summary the DB never stores.
+  findPageInList(
+    listId: number,
+    options: FindPageInListOptions
+  ): Promise<MediaListItemPage>;
   findInList(
     listId: number,
     tmdbId: number,
@@ -22,4 +43,18 @@ export interface MediaListItemRepository {
   remove(itemId: number): Promise<void>;
   // Applies the given order as a single unit so a failure cannot leave gaps.
   applyOrder(listId: number, orderedItemIds: number[]): Promise<void>;
+  // Stamps or clears pinnedAt. Pinning again refreshes the timestamp, which is what
+  // keeps the most recently pinned title ahead of one pinned earlier.
+  pin(itemId: number): Promise<void>;
+  unpin(itemId: number): Promise<void>;
+  // Which of the given lists already hold this title, and the item id on each one, for
+  // the media page's "already on this list" check -- the item id is what lets that
+  // button remove the title again without a second lookup. Scoped to a candidate set
+  // rather than global so it stays a single query against lists the caller can already
+  // see, not every list in the database.
+  findItemsContaining(
+    listIds: number[],
+    tmdbId: number,
+    mediaType: MediaType
+  ): Promise<{ listId: number; itemId: number }[]>;
 }
