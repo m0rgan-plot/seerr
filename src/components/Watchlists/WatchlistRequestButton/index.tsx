@@ -77,7 +77,10 @@ const WatchlistRequestButton = ({
 
       {requestable &&
         (hideLabel ? (
-          <Tooltip content={intl.formatMessage(globalMessages.request)}>
+          <Tooltip
+            content={intl.formatMessage(globalMessages.request)}
+            tooltipConfig={{ delayShow: 1000 }}
+          >
             <Button
               buttonType="primary"
               buttonSize="sm"

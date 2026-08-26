@@ -2,8 +2,8 @@ import type {
   MediaListCollaboratorDto,
   MediaListDto,
   MediaListInviteDto,
-  MediaListItemDto,
   MediaListItemProgressDto,
+  MediaListItemsResponseDto,
   MediaListMembershipDto,
   MediaListSummaryDto,
 } from '@app/domain/mediaLists/api/dto';
@@ -34,10 +34,12 @@ import type {
   ItemProgress,
   MediaListItem,
   MediaListItemFilter,
+  MediaListItemSortBy,
 } from '@app/domain/mediaLists/models/MediaListItem';
 import type { MediaType } from '@server/constants/media';
 import { useMemo } from 'react';
 import useSWR from 'swr';
+import useSWRInfinite from 'swr/infinite';
 
 // Each hook maps the wire shape into domain models before anything renders, so components
 // never see a DTO. The global SWR fetcher already does the GET, so no fetcher is passed.
@@ -107,18 +109,71 @@ export const useMediaListMembership = (
   };
 };
 
+interface PagedQuery<T> extends Query<T[]> {
+  // The filtered/sorted total across every page, not just what has loaded so far --
+  // what a "seen N of M" line needs once M can exceed one page.
+  totalResults: number;
+  seenCount: number;
+  isLoadingMore: boolean;
+  isReachingEnd: boolean;
+  fetchMore: () => void;
+}
+
 export const useMediaListItems = (
   mediaListId: number | undefined,
-  filter: MediaListItemFilter = 'all'
-): Query<MediaListItem[]> => {
-  const { data, error, mutate } = useSWR<MediaListItemDto[]>(
-    mediaListId ? itemsKey(mediaListId, filter) : null
-  );
+  filter: MediaListItemFilter = 'all',
+  sortBy: MediaListItemSortBy = 'added'
+): PagedQuery<MediaListItem> => {
+  const { data, error, size, setSize, isValidating, mutate } =
+    useSWRInfinite<MediaListItemsResponseDto>(
+      (pageIndex, previousPageData) => {
+        if (previousPageData && pageIndex + 1 > previousPageData.totalPages) {
+          return null;
+        }
+        return mediaListId
+          ? itemsKey(mediaListId, pageIndex + 1, filter, sortBy)
+          : null;
+      },
+      {
+        initialSize: 3,
+        revalidateFirstPage: false,
+        dedupingInterval: 30000,
+        revalidateOnFocus: false,
+      }
+    );
+
+  const isLoadingInitialData = !data && !error;
+  const isLoadingMore =
+    isLoadingInitialData ||
+    (size > 0 &&
+      !!data &&
+      typeof data[size - 1] === 'undefined' &&
+      isValidating);
+  const lastPage = data?.[data.length - 1];
+  const isEmpty =
+    !isLoadingInitialData && (data?.[0]?.results.length ?? 0) === 0;
+  // Compares against the pages actually loaded (data.length), not the requested size --
+  // getKey already stops handing out further pages past totalPages, but size can run
+  // ahead of what data holds while a page is still in flight.
+  const isReachingEnd =
+    isEmpty || (!!data && !!lastPage && data.length >= lastPage.totalPages);
 
   return {
-    data: useMemo(() => data?.map(toMediaListItem), [data]),
+    data: useMemo(
+      () => data?.flatMap((page) => page.results.map(toMediaListItem)),
+      [data]
+    ),
+    totalResults: lastPage?.totalResults ?? 0,
+    seenCount: lastPage?.seenCount ?? 0,
     error,
-    isLoading: !!mediaListId && !data && !error,
+    isLoading: !!mediaListId && isLoadingInitialData,
+    isLoadingMore,
+    isReachingEnd,
+    fetchMore: () => {
+      if (!isReachingEnd) {
+        setSize(size + 1);
+      }
+    },
     revalidate: () => {
       mutate();
     },

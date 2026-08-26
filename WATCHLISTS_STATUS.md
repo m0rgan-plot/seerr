@@ -23,6 +23,9 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
 | 11 | Pin an item: `pinnedAt` column + migrations, domain/data/presentation backend, frontend domain + data layer. Presentation UI deferred to a `/design` pass | ✅ |
 | 12 | Pin presentation UI: `WatchlistPinToggle`, merged pin/watched badge+button into one toggle picto on both the grid card and the poster strip, Remove relocated to the bottom action bar, Cypress coverage | ✅ |
 | 13 | Pin/polish feedback round: live reorder-on-pin fix, hover states, bigger toggles, added-date moved detail-only, title/year on the shelf strip, compact Request button, pin always visible with a new pin glyph, status dot removed from the shelf, `seenBy` line removed, Dropdown ghost-item purple fixed | ✅ |
+| 14 | Paginate the detail page's item list: `findPageInList` (SQL pagination when `filter=all`, in-memory page-after-filter/sort otherwise), `sortBy=title` moved server-side, `useSWRInfinite` + scroll-triggered fetch on `WatchlistDetail`, `seenCount` returned separately from the page since it must span the whole list, `seerr-api.yml` + supertest + unit test coverage. Plan: `~/.claude/plans/melodic-percolating-marshmallow.md` | ✅ |
+| 15 | Flipped the default (`sortBy=added`) unpinned order from position-ascending to position-descending, reconciling `findByList`/`findPageInList` with the shelf preview's own most-recently-added-first order (see 2026-08-25 decisions below) — `/reorder`'s `applyOrder` now assigns positions in reverse so a manual order still reads back unchanged. Added a "View All" tile to `WatchlistPosterStrip` linking into the detail page once a list outgrows its 7-item preview | ✅ |
+| 16 | Fixed pin/watched/add/remove silently not refreshing the detail page's item list since pagination landed: `useMediaListMutations`'s `refreshList` matched a plain items-key prefix, but `useSWRInfinite` subscribes to a `$inf$`-prefixed aggregate key that SWR's predicate-matching `mutate` deliberately never reaches. Fix clears each loaded page's own cache entry, then walks `useSWRConfig().cache` for the aggregate key(s) to mutate by exact key | ✅ |
 
 ## Decisions log
 
@@ -120,6 +123,38 @@ Legend: ☐ not started · 🟡 in progress · ✅ done · ⚠️ partial / need
   it has no reason to also carry their names.
 - **2026-08-15** — Known nit: toggling an episode scrolls the detail page back to the top,
   because the item list re-renders on revalidation. Worth a look when the reorder design lands.
+
+- **2026-08-25** — Title sort cannot move into SQL: `Media` has no `title` column (it is always
+  resolved live from TMDB). `findPageInList` only pages the pinned-first / position-ascending
+  order; a `sortBy=title` or non-`all` filter request falls back to resolving the whole list once
+  and paging the in-memory result, since watched-state filtering already depended on data
+  (episode/season progress) no SQL WHERE clause can express either.
+- **2026-08-25** — Reverted an initial choice to make the default page order newest-added-first.
+  `/reorder` and `position` are a real, tested v1 feature (see the 2026-08-14 decision above), and
+  `GET /items` with no `sortBy` is its only observable order today (no drag affordance exists in
+  the UI yet). Flipping the default direction would have silently broken that contract to match a
+  client-side preference (`WatchlistDetail`'s now-removed local `sortItems`) that was never
+  reconciled with reorder in the first place. Default order stays pinned-first, then position
+  ascending, exactly matching `findByList`.
+- **2026-08-25** — `seenCount` is returned separately from the item page, computed over the whole
+  list (via a `withSummaries: false` pass, no TMDB calls) rather than derived from the loaded
+  items client-side. Once the item list pages, `items.length` on the client no longer means "every
+  item," so the "seen N of M" line would otherwise undercount M as soon as a second page exists.
+- **2026-08-25** — Reversed the previous same-day decision to keep `GET /items`'s default order at
+  position-ascending. User testing surfaced the actual inconsistency that decision missed: the
+  `/watchlists` shelf preview already reads unpinned titles most-recently-added-first (`byRecency`
+  in `buildLists`), so the detail page showing the opposite direction under the same "Added Date"
+  label wasn't preserving a real contract, just an accidental one -- and a freshly added title
+  landing at the bottom of its own "Added Date" sort reads as broken, not as manual ordering.
+  `findByList`/`findPageInList` now sort the unpinned tail by `position DESC`. Since drag-reorder
+  still has no UI, `/reorder`'s `applyOrder` was the only other consumer of position direction; it
+  now assigns positions in reverse (`lastIndex - index`) so a manually-applied order still reads
+  back exactly as given -- verified via `repositories.test.ts`'s reorder round-trip.
+- **2026-08-25** — Added a "View All" tile to the end of `WatchlistPosterStrip`, shown only when
+  `itemCount` exceeds the loaded `previewItems`. The whole `WatchlistShelf` row already navigates
+  to the detail page on click, but nothing inside the strip itself hinted that a capped preview
+  (7 items, `PREVIEW_ITEM_COUNT`) wasn't the whole list -- user testing on a 25-item list read the
+  gap after the preview as a pagination bug rather than an intentional cutoff.
 
 ## Milestone 1 verification (2026-08-14)
 

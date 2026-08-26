@@ -25,6 +25,17 @@ import type {
 } from '@server/features/mediaLists/domain/valueObjects/WatchProgress';
 
 export type MediaListItemFilter = 'all' | 'unseen' | 'inprogress' | 'seen';
+export type MediaListItemSortBy = 'added' | 'title';
+
+export interface MediaListItemViewPage {
+  results: MediaListItemView[];
+  page: number;
+  totalResults: number;
+  totalPages: number;
+  // Across the whole list for this filter's underlying scope, not just the loaded
+  // page -- what the "seen N of M" line needs once M can span several pages.
+  seenCount: number;
+}
 
 export interface MediaListItemView {
   item: MediaListItem;
@@ -81,6 +92,10 @@ export interface MediaListInviteView {
 // run of TMDB lookups.
 const PREVIEW_ITEM_COUNT = 7;
 
+// Matches the page size Discover's own infinite-scroll lists use, for a consistent
+// scroll cadence across the app.
+const ITEMS_PAGE_SIZE = 20;
+
 // Assembles what the list and detail screens read. Kept apart from the services that
 // change things, because the rules for reading are only ever "who is allowed to look"
 // plus arithmetic over watch records.
@@ -119,14 +134,13 @@ export class MediaListViewService {
           allSeasonCounts: false,
         });
 
-        // findByList orders by position ascending; the preview reads as "what's new on
-        // this list", so it takes the highest positions instead. Manual drag-reorder
-        // was never built (see WATCHLISTS_STATUS.md), so position is still exactly an
+        // findByList already returns pinned-first (most recently pinned first), then
+        // unpinned by highest position first -- the same "what's new on this list" order
+        // the preview wants, so this re-sort just makes that order explicit rather than
+        // relying on the repository's ordering going unchanged. Manual drag-reorder was
+        // never built (see WATCHLISTS_STATUS.md), so position is still exactly an
         // insertion counter today -- a more reliable "most recent" signal than a
         // timestamp column, which two adds in the same request could tie on.
-        //
-        // Pinned titles lead the strip the same way they lead the detail page, most
-        // recently pinned first, ahead of every unpinned title regardless of recency.
         const pinned = views
           .filter((view) => view.item.pinnedAt !== null)
           .sort(
@@ -163,21 +177,89 @@ export class MediaListViewService {
   public async itemViewsFor(
     listId: number,
     userId: number,
-    filter: MediaListItemFilter = 'all'
-  ): Promise<MediaListItemView[]> {
+    filter: MediaListItemFilter = 'all',
+    sortBy: MediaListItemSortBy = 'added',
+    page = 1,
+    pageSize = ITEMS_PAGE_SIZE
+  ): Promise<MediaListItemViewPage> {
     const list = await this.listService.requireList(listId);
     this.access.assertCan(
       await this.listService.membershipFor(list, userId),
       'viewList'
     );
 
-    const items = await this.items.findByList(listId);
+    // The unfiltered, added-date order is the only one the DB can page directly --
+    // filter matches on watched state, computed below from watch records, and a title
+    // sort depends on a TMDB-resolved summary, so neither exists as a column to filter
+    // or order by in SQL. Both cases fall back to resolving the whole list once and
+    // paging the in-memory result instead.
+    if (filter === 'all' && sortBy === 'added') {
+      const { items, total } = await this.items.findPageInList(listId, {
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+      const [results, seenCount] = await Promise.all([
+        this.buildViews(items, userId, {
+          withSummaries: true,
+          allSeasonCounts: true,
+        }),
+        this.seenCountFor(listId, userId),
+      ]);
+
+      return {
+        results,
+        page,
+        totalResults: total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        seenCount,
+      };
+    }
+
+    const { items } = await this.items.findPageInList(listId, {});
     const views = await this.buildViews(items, userId, {
       withSummaries: true,
       allSeasonCounts: true,
     });
+    const seenCount = views.filter((view) => view.watched).length;
 
-    return views.filter((view) => this.matchesFilter(view, filter));
+    let filtered = views.filter((view) => this.matchesFilter(view, filter));
+    if (sortBy === 'title') {
+      filtered = this.sortByTitle(filtered);
+    }
+
+    const start = (page - 1) * pageSize;
+    return {
+      results: filtered.slice(start, start + pageSize),
+      page,
+      totalResults: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+      seenCount,
+    };
+  }
+
+  // Watch state across the whole list, without resolving a TMDB summary for every
+  // item -- the same lightweight shape summariesFor already uses for its own
+  // seenCount, reused here since the fast path above only has the current page's items.
+  private async seenCountFor(listId: number, userId: number): Promise<number> {
+    const items = await this.items.findByList(listId);
+    const views = await this.buildViews(items, userId, {
+      withSummaries: false,
+      allSeasonCounts: false,
+    });
+    return views.filter((view) => view.watched).length;
+  }
+
+  // Pinned titles stay exactly where findPageInList put them -- most recently pinned
+  // first -- regardless of sortBy; only the unpinned remainder is re-ordered by title.
+  // Without this split, a title sort would silently undo a pin.
+  private sortByTitle(views: MediaListItemView[]): MediaListItemView[] {
+    const pinned = views.filter((view) => view.item.pinnedAt !== null);
+    const unpinned = [
+      ...views.filter((view) => view.item.pinnedAt === null),
+    ].sort((a, b) =>
+      (a.summary?.title ?? '').localeCompare(b.summary?.title ?? '')
+    );
+    return [...pinned, ...unpinned];
   }
 
   // Everyone whose watch state can show up on the list. The owner is deliberately not a

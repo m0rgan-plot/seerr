@@ -8,6 +8,8 @@ import type { TvMetadataProvider } from '@server/features/mediaLists/domain/port
 import type { MediaListCollaboratorRepository } from '@server/features/mediaLists/domain/repositories/MediaListCollaboratorRepository';
 import type {
   AddMediaListItemInput,
+  FindPageInListOptions,
+  MediaListItemPage,
   MediaListItemRepository,
 } from '@server/features/mediaLists/domain/repositories/MediaListItemRepository';
 import type {
@@ -112,7 +114,7 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
 
   async findByList(listId: number): Promise<MediaListItem[]> {
     // Mirrors the TypeORM repository: pinned items lead, most recently pinned first,
-    // ahead of everything unpinned in position order.
+    // ahead of everything unpinned most-recently-added first.
     return this.items
       .filter((item) => item.listId === listId)
       .sort((a, b) => {
@@ -122,8 +124,35 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
         if (a.pinnedAt && b.pinnedAt) {
           return b.pinnedAt.getTime() - a.pinnedAt.getTime();
         }
-        return a.position - b.position;
+        return b.position - a.position;
       });
+  }
+
+  async findPageInList(
+    listId: number,
+    { skip = 0, take }: FindPageInListOptions
+  ): Promise<MediaListItemPage> {
+    // Mirrors the TypeORM repository: same order as findByList, pinned items lead
+    // (most recently pinned first), then everything unpinned most-recently-added first.
+    const ordered = this.items
+      .filter((item) => item.listId === listId)
+      .sort((a, b) => {
+        if (!!a.pinnedAt !== !!b.pinnedAt) {
+          return a.pinnedAt ? -1 : 1;
+        }
+        if (a.pinnedAt && b.pinnedAt) {
+          return b.pinnedAt.getTime() - a.pinnedAt.getTime();
+        }
+        return b.position - a.position;
+      });
+
+    return {
+      items:
+        take === undefined
+          ? ordered.slice(skip)
+          : ordered.slice(skip, skip + take),
+      total: ordered.length,
+    };
   }
 
   async findInList(
@@ -179,12 +208,15 @@ export class FakeMediaListItemRepository implements MediaListItemRepository {
   }
 
   async applyOrder(listId: number, orderedItemIds: number[]): Promise<void> {
+    // Mirrors the TypeORM repository: reads sort position DESC, so the first id here
+    // has to land on the highest position for the given order to come back unchanged.
+    const lastIndex = orderedItemIds.length - 1;
     orderedItemIds.forEach((itemId, index) => {
       const item = this.items.find(
         (candidate) => candidate.id === itemId && candidate.listId === listId
       );
       if (item) {
-        item.position = index;
+        item.position = lastIndex - index;
       }
     });
   }

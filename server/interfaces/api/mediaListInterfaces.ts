@@ -138,6 +138,13 @@ export interface MediaListMembership {
 }
 
 export type MediaListsResponse = MediaListSummary[];
-export type MediaListItemsResponse = MediaListItem[];
+export interface MediaListItemsResponse {
+  page: number;
+  totalResults: number;
+  totalPages: number;
+  // Across the whole list for this filter's underlying scope, not just this page.
+  seenCount: number;
+  results: MediaListItem[];
+}
 export type MediaListCollaboratorsResponse = MediaListCollaborator[];
 export type MediaListInvitesResponse = MediaListInvite[];

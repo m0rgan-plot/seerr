@@ -8666,15 +8666,37 @@ paths:
             type: string
             enum: [all, unseen, inprogress, seen]
             default: all
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [added, title]
+            default: added
+        - in: query
+          name: page
+          schema:
+            type: number
+            default: 1
       responses:
         '200':
           description: Titles returned
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MediaListItem'
+                type: object
+                properties:
+                  page:
+                    type: number
+                  totalPages:
+                    type: number
+                  totalResults:
+                    type: number
+                  seenCount:
+                    type: number
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MediaListItem'
     post:
       summary: Add a title to a watchlist
       tags:

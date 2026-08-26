@@ -45,4 +45,8 @@ export const itemFilterSchema = z
   .enum(['all', 'unseen', 'inprogress', 'seen'])
   .default('all');
 
+export const itemSortBySchema = z.enum(['added', 'title']).default('added');
+
+export const itemPageSchema = z.coerce.number().int().positive().default(1);
+
 export const listIdParam = z.coerce.number().int().positive();
