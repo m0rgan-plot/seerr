@@ -21,6 +21,7 @@ import {
   canManageCollaborators,
 } from '@app/domain/mediaLists/models/MediaList';
 import type {
+  MediaListItem,
   MediaListItemFilter,
   MediaListItemSortBy,
 } from '@app/domain/mediaLists/models/MediaListItem';
@@ -40,7 +41,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Watchlists.WatchlistDetail', {
@@ -81,9 +82,9 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
 
   const { data: list, error, isLoading } = useMediaList(mediaListId);
   const {
-    data: items,
-    totalResults,
-    seenCount,
+    data: rawItems,
+    totalResults: rawTotalResults,
+    seenCount: rawSeenCount,
     isLoading: itemsLoading,
     isLoadingMore,
     isReachingEnd,
@@ -91,12 +92,39 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
     revalidate,
   } = useMediaListItems(mediaListId, filter, sortBy);
 
+  // A watched/pin toggle clears every loaded page's cache to force a refetch (see
+  // useMediaListMutations), which makes rawItems momentarily undefined. Snapshotting
+  // the last good page keeps the grid on screen through that gap instead of flashing
+  // it out for a spinner on every toggle.
+  const [itemsSnapshot, setItemsSnapshot] = useState<{
+    items: MediaListItem[];
+    totalResults: number;
+    seenCount: number;
+  } | null>(null);
+  useEffect(() => {
+    if (rawItems) {
+      setItemsSnapshot({
+        items: rawItems,
+        totalResults: rawTotalResults,
+        seenCount: rawSeenCount,
+      });
+    }
+  }, [rawItems, rawTotalResults, rawSeenCount]);
+
+  const items = itemsSnapshot?.items;
+  const totalResults = itemsSnapshot?.totalResults ?? 0;
+  const seenCount = itemsSnapshot?.seenCount ?? 0;
+
   useVerticalScroll(
     fetchMore,
     !itemsLoading && !isLoadingMore && !isReachingEnd
   );
   const { setMovieWatched, setSeasonsWatched, setPinned, removeItem } =
     useMediaListMutations(mediaListId);
+
+  // Read back from the snapshot so the tracker follows a refresh rather than holding
+  // the copy it was opened with.
+  const trackedItem = items?.find((item) => item.id === trackingItemId) ?? null;
 
   if (error) {
     return <Error statusCode={404} />;
@@ -107,9 +135,6 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
   }
 
   const canEdit = canEditItems(list.role);
-  // Read back from the current items so the tracker follows a refresh rather than
-  // holding the copy it was opened with.
-  const trackedItem = items?.find((item) => item.id === trackingItemId) ?? null;
 
   const labelFor = (value: MediaListItemFilter) =>
     intl.formatMessage(messages[value]);
@@ -212,7 +237,7 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
         </div>
       </div>
 
-      {itemsLoading ? (
+      {itemsLoading && !items ? (
         <LoadingSpinner />
       ) : items && items.length > 0 ? (
         <>
@@ -289,18 +314,6 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
               <LoadingSpinner />
             </div>
           )}
-
-          {/* Below the grid rather than inside it: the columns are laid out by auto-fill
-              now, and a full-width row in the middle would leave a hole beside it. */}
-          {trackedItem && (
-            <div className="mt-4">
-              <WatchlistEpisodeTracker
-                mediaListId={mediaListId}
-                item={trackedItem}
-                onClose={() => setTrackingItemId(null)}
-              />
-            </div>
-          )}
         </>
       ) : (
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
@@ -317,6 +330,13 @@ const WatchlistDetail = ({ mediaListId }: { mediaListId: number }) => {
           )}
         </div>
       )}
+
+      <WatchlistEpisodeTracker
+        show={trackingItemId !== null}
+        mediaListId={mediaListId}
+        item={trackedItem}
+        onClose={() => setTrackingItemId(null)}
+      />
 
       <ShareWatchlistModal
         show={showShare}

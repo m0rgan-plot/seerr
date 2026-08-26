@@ -32,8 +32,15 @@ export const useMediaListMutations = (mediaListId?: number) => {
       // Clearing each page's own cache first (revalidate: false, so nothing renders off
       // it -- no component reads these plain keys directly) is what makes the next
       // revalidate below actually treat every loaded page as stale and refetch it.
+      // Scoped to page keys (the `?` from their query string) only -- a progress key
+      // (`.../items/{id}/progress`) also starts with itemsPrefix but IS read directly by
+      // a mounted useItemProgress, so clearing it with revalidate: false the same way
+      // would strand that hook on `undefined` forever instead of just refetching below.
       await mutate(
-        (key) => typeof key === 'string' && key.startsWith(itemsPrefix),
+        (key) =>
+          typeof key === 'string' &&
+          key.startsWith(itemsPrefix) &&
+          key.includes('?'),
         undefined,
         { revalidate: false }
       );
@@ -43,17 +50,27 @@ export const useMediaListMutations = (mediaListId?: number) => {
       // `$inf$`/`$sub$` key before it ever reaches a filter function (see swr's
       // internalMutate), so the only way to revalidate it from outside the component is
       // an exact-key mutate, found by walking the cache this hook's own SWRConfig uses.
+      // Any open episode tracker's progress key is walked the same way, and revalidated
+      // in place (no pre-clear) so it keeps showing its last data while refetching.
       const infinitePrefix = `$inf$${itemsPrefix}`;
       const infiniteKeys: string[] = [];
+      const progressKeys: string[] = [];
       for (const key of cache.keys()) {
         if (typeof key === 'string' && key.startsWith(infinitePrefix)) {
           infiniteKeys.push(key);
+        } else if (
+          typeof key === 'string' &&
+          key.startsWith(itemsPrefix) &&
+          key.endsWith('/progress')
+        ) {
+          progressKeys.push(key);
         }
       }
 
       await Promise.all([
         mutate(api.listKey(listId)),
         ...infiniteKeys.map((key) => mutate(key)),
+        ...progressKeys.map((key) => mutate(key)),
         mutate(api.mediaListsKey),
       ]);
     },

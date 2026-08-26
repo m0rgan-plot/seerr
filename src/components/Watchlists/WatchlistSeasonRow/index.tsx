@@ -135,7 +135,7 @@ const WatchlistSeasonRow = ({
           disabled={busy}
           onClick={() => onToggleSeason(!season.isComplete)}
         >
-          {season.isComplete && <CheckIcon />}
+          <CheckIcon />
           <span>
             {intl.formatMessage(
               season.isComplete ? messages.unmarkseason : messages.markseason
