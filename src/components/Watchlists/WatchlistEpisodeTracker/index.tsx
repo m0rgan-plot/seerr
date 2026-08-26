@@ -7,6 +7,7 @@ import { useMediaListMutations } from '@app/domain/mediaLists/hooks/useMediaList
 import { useItemProgress } from '@app/domain/mediaLists/hooks/useMediaLists';
 import type { MediaListItem } from '@app/domain/mediaLists/models/MediaListItem';
 import useToasts from '@app/hooks/useToasts';
+import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
 import { CheckIcon } from '@heroicons/react/24/outline';
@@ -84,7 +85,11 @@ const WatchlistEpisodeTracker = ({
       leaveTo="opacity-0"
       show={show}
     >
-      <Modal onCancel={onClose} dialogClass="sm:max-w-2xl">
+      <Modal
+        onCancel={onClose}
+        cancelText={intl.formatMessage(globalMessages.close)}
+        dialogClass="sm:max-w-2xl"
+      >
         <div className="flex flex-wrap items-start gap-4">
           <div className="relative aspect-[2/3] w-14 flex-none overflow-hidden rounded bg-gray-900">
             {item.posterPath && (
